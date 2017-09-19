@@ -1,0 +1,259 @@
+<!--
+This file defines a Javascript class with methods for making requests to the
+YouTube Content ID and Google Plus API's. Used in the main search-app.html.
+-->
+
+<script>
+
+/** Class used to perform API calls. */
+class ApiCalls {
+
+     constructor() {
+        /**
+          * The access token for the currently authorized user.
+          * @type{string}
+          */
+        this.accessToken = '';
+     }
+
+    /**
+     * Makes a call to the Partner API to get the user's user ID.
+     * @param {Function} callback The response function.
+     */
+    getUserID(callback) {
+        var path = "https://www.googleapis.com/plus/v1/people/me";
+        var params = {
+            'access_token': this.accessToken,
+        };
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(request, callback);
+    }
+
+    /**
+     * Makes a call to the Partner API to get the user's content owner ID.
+     * @param {Function} callback The response function.
+     */
+    getOwnerID(callback) {
+        var path = (
+            'https://www.googleapis.com/youtube/partner/v1/contentOwners');
+        var params = {
+            'access_token': this.accessToken,
+            'fetchMine': true
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        request.execute(callback);
+    }
+
+    /*
+     * Uses the Partner API to search for assets based on ISRC.
+     * @param {Function} callback The response function.
+     * @param {string} query The user query inside the search box.
+     */
+    isrcAssetSearch(callback, query) {
+        var path = (
+            "https://www.googleapis.com/youtube/partner/v1/assetSearch");
+        var params = {
+            'ownershipRestriction': 'none',
+            'type': 'sound_recording',
+            'access_token': this.accessToken,
+            'isrcs': query,
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        };
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(request, callback);
+    }
+
+    /**
+     * Uses the Partner API to search for assets based on ISWC.
+     * @param {Function} callback The response function.
+     * @param {string} query The user query inside the search box.
+     */
+    iswcAssetSearch(callback, query) {
+        var path = (
+            "https://www.googleapis.com/youtube/partner/v1/assetSearch");
+        var params = {
+            'ownershipRestriction': 'none',
+            'type': 'sound_recording',
+            'access_token': this.accessToken,
+            'metadataSearchFields': 'iswc:' + query,
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        };
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(request, callback, true);
+    }
+
+    /**
+     * Makes a call to asset list in the Partner API.
+     * @param {Function} callback The response function.
+     * @param {string} assetIDStr A string of asset IDs to search.
+     * @param {!Array<string>} assetIDArr An array of asset IDs.
+     * @param {Function} callback The function to be called with the search
+     *     result.
+     * @param {...object} ...args A variable number of additional
+     *     parameters to the {callback} function.
+     */
+    assetList(callback, assetIDStr, assetIDArr, ...args) {
+        var path = 'https://www.googleapis.com/youtube/partner/v1/assets';
+        var params = {
+            'access_token': this.accessToken,
+            'id': assetIDStr,
+            'fetchMetadata': 'effective',
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(request, callback, assetIDArr, ...args);
+    }
+
+    /**
+     * Makes a call to metadata history in the Partner API.
+     * @param {Function} callback The response function.
+     * @param {string} assetID The asset ID.
+     * @param {!Array<Object>} assets An array of sound recording versions.
+     * @param {integer} index The current index in the asset array.
+     * @param {!Array<Object>} assetRelationships An array of the current
+     *     sound recording relationships.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    metadataHistory(
+        callback, assetID, assets, index, assetRelationships, srMap) {
+        var path = (
+            'https://www.googleapis.com/youtube/partner/v1/' +
+            'metadataHistory');
+        var params = {
+            'access_token': this.accessToken,
+            'assetId': assetID,
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(
+            request, callback, assets, index, assetRelationships, srMap);
+    }
+
+    /**
+     * Makes a call to asset relationship in the Partner API.
+     * @param {Function} callback The response function.
+     * @param {string} assetID The asset ID.
+     * @param {!Array<Object>} assets An array of sound recording versions.
+     * @param {integer} index The current index in the asset array.
+     * @param {!Array<Object>} assetRelationships An array of the current
+     *     sound recording relationships.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    assetRelationships(
+        callback, assetID, assets, index, assetRelationships, srMap) {
+        var path = (
+            'https://www.googleapis.com/youtube/partner/v1/' +
+            'assetRelationships');
+        var params = {
+            'access_token': this.accessToken,
+            'assetId': assetID,
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(
+            request, callback, assets, index, assetRelationships, srMap);
+    }
+
+    /**
+     * Makes a call to ContentOwner in the Partner API.
+     * @param {Function} callback The response function.
+     * @param {string} ownerIDs A string of owner IDs to search.
+     * @param {Function} callback The function to be called with the search
+     *     result.
+     * @param {Object} territories An object containing mappings of
+     *     sound recording assets to the territories they're owned in.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    contentOwners(callback, ownerIDs, territories, compMap, srMap) {
+        var path = (
+            'https://www.googleapis.com/youtube/partner/v1/contentOwners');
+        var params = {
+            'access_token': this.accessToken,
+            'id': ownerIDs,
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0]
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(
+            request, callback, territories, compMap, srMap);
+    }
+
+    /**
+     * Makes a call to asset list in the Partner API requesting ownership
+     *     information.
+     * @param {Function} callback The response function.
+     * @param {string} myAssetIDStr A string of sound recording asset IDs
+     *     that belong to the user to search.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    assetListOwnership(callback, myAssetIDStr, compMap, srMap) {
+        var path = (
+             'https://www.googleapis.com/youtube/partner/v1/assets');
+        var params = {
+            'access_token': this.accessToken,
+            'id': myAssetIDStr,
+            'fetchOwnership': 'mine',
+            'fetchOwnershipConflicts': 'true',
+            'onBehalfOfContentOwner': AUTH.contentOwnerIds[0],
+        }
+        var request = this._buildApiRequest('GET', path, params);
+        this._executeRequest(request, callback, compMap, srMap, this);
+    }
+
+    /**
+     * Remove API parameters that aren't being used.
+     * @param {!Object} params The API call parameters.
+     * @returns {!Object} params The API call parameters without any empty
+     *     properties.
+     */
+    _removeEmptyParams(params) {
+        for (var p in params) {
+            if (!params[p] || params[p] == 'undefined') {
+                delete params[p];
+            }
+        }
+        return params;
+    }
+
+    /**
+     * Makes the API call.
+     * @param {!Object} request The API request.
+     * @param {Function} callback The function to call with the API
+     *     response.
+     * @param {...object} ...args A variable number of additional
+     *     parameters to the {callback} function.
+     */
+    _executeRequest(request, callback, ...args) {
+        request.execute(function(response) {
+            if (response['error']) {
+                ERROR_HANDLER.handleError(response, request);
+            } else {
+                callback(response, ...args);
+            }
+        });
+    }
+
+    /**
+     * Creates an API request to be called.
+     * @param {string} requestMethod The way the request will be called.
+     * @param {string} path The URL for the API call.
+     * @param {!Object} params The paramaters for the API call.
+     * @returns {!Object} request The API request.
+     */
+    _buildApiRequest(requestMethod, path, params) {
+        params = this._removeEmptyParams(params);
+        var request = gapi.client.request({
+            'method': requestMethod,
+            'path': path,
+            'params': params
+        });
+        return request;
+    }
+}
+
+</script>

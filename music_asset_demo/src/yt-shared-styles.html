@@ -1,0 +1,213 @@
+<!--
+This file contains the CSS styles of the application, shared across all of the
+Polymer modules.
+-->
+
+<dom-module id="yt-shared-styles">
+  <template>
+    <style include="iron-flex">
+
+    .toolbar {
+        padding: .5% 2% .5% 0;
+        color: #444;
+        background-color: #e52d27;
+    }
+
+    .fade {
+        opacity: .7;
+    }
+
+    p {
+        margin: 12px;
+    }
+
+    #title {
+        color: white;
+    }
+
+    .content {
+        display: block;
+        color: #444;
+        width: 60%;
+        min-width: 400px;
+        margin: 30px auto;
+    }
+
+    .header {
+        font-size: 24px;
+        font-weight: 800;
+        padding: 25px 0 5px 0;
+    }
+
+    .subheader {
+        font-size: 16px;
+        font-weight: 300;
+    }
+
+    .results-subheader {
+        font-size: 20px;
+        font-weight: 500;
+        padding: 25px 0 5px 0;
+    }
+
+    .checkbox-subheader {
+        padding: 20px 0 5px 0;
+    }
+
+    .table-for-word-break {
+        table-layout: fixed;
+        width: 100%;
+        word-wrap: break-word;
+    }
+
+    .table-for-word-break th, td {
+        padding-bottom: 5px;
+        padding-left: 10px;
+    }
+
+    .info {
+        font-size: 28px;
+    }
+
+    .sub-info {
+        font-size: 20px;
+    }
+
+    .description {
+        font-size: 16px;
+    }
+
+    .search-card {
+        width: 100%;
+        padding: 20px 30px;
+    }
+
+    .link {
+        text-decoration: underline;
+        color: blue;
+        cursor: pointer;
+        cursor: hand;
+    }
+
+    .asset-card {
+        display: inline-block;
+        padding: 10px 20px;
+        white-space: wrap;
+        margin-bottom: 1px;
+    }
+
+    .red-asset-card {
+        --paper-card-background-color: #fad3d1;
+    }
+
+    .asset-info {
+        display: block;
+        line-height: 1.5em;
+        padding-bottom: 5px;
+        font-weight: lighter;
+    }
+
+    #sr-load-more-footer {
+        padding-top: 25px;
+        text-align: center;
+    }
+
+    paper-checkbox {
+        --paper-checkbox-checked-color: #e52d27;
+    }
+
+    .toggle-versions {
+        @apply(--layout-self-end);
+    }
+
+    .toggle-assets {
+        @apply(--layout-self-end);
+    }
+
+    #search-container {
+        @apply(--layout-self-center);
+        @apply(--layout-flex);
+        position: relative;
+        padding: 0 10px 0 10px;
+    }
+
+    #checkboxes-collapsible {
+        padding-top: 10px;
+    }
+
+    #spinner-container {
+        @apply(--layout-self-center);
+        display: none;
+        margin: 15px 0 0 0;
+    }
+
+    paper-input {
+        --paper-input-container-focus-color: #e52d27;
+    }
+
+    paper-dropdown-menu, paper-listbox {
+        --paper-input-container-focus-color: #e52d27;
+        @apply(--layout-self-center);
+        padding-right: 3%;
+    }
+
+    paper-listbox {
+        width: 100px;
+    }
+
+    paper-dropdown-menu {
+        width: 20%;
+        margin: auto;
+    }
+
+    paper-dropdown-input {
+        --paper-input-container-focus-color: #e52d27;
+    }
+
+    paper-button {
+        @apply(--layout-self-center);
+        text-align: center;
+        background-color: white;
+    }
+
+    paper-button.auth {
+        display: none;
+        margin-left: 1%;
+    }
+
+    paper-button.export {
+        @apply(--layout-self-center);
+        text-align: center;
+    }
+
+    paper-button#select-all-btn {
+            margin-top: 10px;
+        },
+
+    .help-icon {
+        margin-left: 10px;
+    }
+
+    .tooltip {
+        width: 160px;
+    }
+
+    :host {
+        --paper-tooltip: {
+            font-size: 12px;
+        };
+    }
+
+    .checkbox-table tr, td {
+        padding: none;
+    }
+
+    @media screen and (max-width: 600px) {
+        .content {
+            width: 90%;
+        }
+    }
+
+    </style>
+  </template>
+</dom-module>

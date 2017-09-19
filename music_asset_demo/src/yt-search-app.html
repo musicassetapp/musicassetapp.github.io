@@ -1,0 +1,407 @@
+<!--
+This is a web app to demonstrate a use for the YouTube Content ID API.
+See: https://developers.google.com/youtube/partner/
+The web app demonstrates two use cases: searching by ISRC and receiving
+sound recording versions sorted by asset ID (either your versions or all
+versions) with that ISRC as well as the compositions linked to them, and
+searching by ISWC and receiving the sound recording assets linked to
+compositions with that ISWC. This is acheived through multiple calls to the
+Content ID API. This file imports the classes and modules used, lays out a base
+template, and defines generic methods.
+-->
+
+<!-- Import all Polymer components-->
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/app-layout/app-header-layout/app-header-layout.html">
+<link rel="import" href="../bower_components/app-layout/app-header/app-header.html">
+<link rel="import" href="../bower_components/app-layout/app-scroll-effects/app-scroll-effects.html">
+<link rel="import" href="../bower_components/app-layout/app-toolbar/app-toolbar.html">
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/iron-resizable-behavior/iron-resizable-behavior.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+
+<!-- Import Polymer modules used -->
+<link rel="import" href="./yt-assets-display.html">
+<link rel="import" href="./yt-content-owner-choice.html">
+<link rel="import" href="./yt-loading-spinner.html">
+<link rel="import" href="./yt-search-form.html">
+<link rel="import" href="./yt-shared-styles.html">
+
+<!-- Import and load in the classes defined in the other HTML files -->
+<link rel="import" href="./api-calls.html">
+<link rel="import" href="./asset-handler.html">
+<link rel="import" href="./auth-client.html">
+<link rel="import" href="./checkbox-table-handler.html">
+<link rel="import" href="./csv-export.html">
+<link rel="import" href="./display-handler.html">
+<link rel="import" href="./error-handler.html">
+<link rel="import" href="./isrc-search-handler.html">
+<link rel="import" href="./iswc-search-handler.html">
+<link rel="import" href="./local-storage.html">
+<link rel="import" href="./resize-handler.html">
+<link rel="import" href="./scroll-handler.html">
+
+<!-- Import global variables after all classes defined -->
+<link rel="import" href="./global-vars.html">
+
+<dom-module id="yt-search-app">
+
+<template>
+
+  <style include="yt-shared-styles"></style>
+
+  <!-- Pop-up dialog for alerts -->
+  <paper-dialog id="paper-dialog" with-backdrop>
+    <p id="paper-dialog-text">Text</p>
+    <div class="buttons">
+      <paper-button autofocus dialog-confirm>OK</paper-button>
+    </div>
+  </paper-dialog>
+
+  <!-- Pop-up panel to select a content owner -->
+  <yt-content-owner-choice id="content-owner-choice"></yt-content-owner-choice>
+
+  <app-header-layout id="page">
+
+    <!-- Top page header -->
+    <app-header effects="waterfall" fixed shadow slot="header">
+      <app-toolbar class="toolbar">
+        <div spacer main-title id="title">Music Asset Search</div>
+          <paper-button id="switch-content-owners" raised style="display: none;" on-tap="chooseContentOwner">Switch Content<br>Owners</paper-button>
+          <paper-button id="clear-history" raised  style="display: none;" on-tap="clearSearchHistory">Clear Search<br>History</paper-button>
+          <paper-button id="sign-in" class="auth" raised>Sign in</paper-button>
+          <paper-button id="sign-out" class="auth" raised>Sign out</paper-button>
+      </app-toolbar>
+    </app-header>
+
+    <div class="content layout vertical">
+
+      <!-- Search card to perform the asset search -->
+      <yt-search-form id="search-form"></yt-search-form>
+
+      <!-- Loading spinner -->
+      <div id="spinner-container"><yt-loading-spinner id="loading-spinner"></yt-loading-spinner></div>
+
+      <!-- Display results of search -->
+      <yt-assets-display id="assets-display"></yt-assets-display>
+
+    </div>
+
+  </app-header-layout>
+</template>
+
+<script>
+
+window.addEventListener('WebComponentsReady', function(e) {
+    // Executed when the Polymer WebComponents finish loading.
+    searchApp = document.querySelector('yt-search-app');
+    CSV_EXPORT.addExportListeners();
+});
+
+
+Polymer({
+
+    is: 'yt-search-app',
+
+    /**
+     * General properties that can be used in any sub-file or module of
+     * yt-search-app.
+     */
+    properties: {
+
+        /** Whether the current search type is 'ISRC'. */
+        isIsrcSearch: {
+            type: Boolean,
+        },
+
+        /**
+         * Whether the search results only belong to the current content owner
+         * or belong to everyone.
+         */
+        showMine: {
+            type: Boolean,
+            value: false,
+        },
+    },
+
+    behaviors: [
+        Polymer.IronResizableBehavior
+    ],
+
+    listeners: {
+        'iron-resize': '_onResize',
+    },
+
+    /** Listens for window size change and resizes elements accordingly. */
+    _onResize: function() {
+        SCROLL_HANDLER.removeScrollListener();
+        var beforeResize = SCROLL_HANDLER.getScrollLocation();
+
+        RESIZE_HANDLER.resizeAll();
+        var afterResize = SCROLL_HANDLER.getScrollLocation();
+
+        // Checks if the scroll region is smaller.
+        var changed = (beforeResize - afterResize) > 0;
+        // If the scroll region is smaller and pagination is enabled, moves
+        // the scrollbar up to avoid loading more information.
+        if (changed && !searchApp.isIsrcSearch &&
+            ISWC_HANDLER.srRemainingAssets.length > 0) {
+            SCROLL_HANDLER.scrollUp();
+        }
+        SCROLL_HANDLER.addScrollListener();
+    },
+
+    /******************************Helper Methods******************************/
+    /**
+     * Generic methods that can be used in any sub-file or module of yt-search-app.
+     */
+
+    /**
+     * Determines whether a certain value is contained within any object in an
+     * object array.
+     * @param {string} key The key of the value being searched for.
+     * @param {Typeof Object[key]} value The value being searched for.
+     * @param {Array<Object>} arr The array being searched.
+     * @return {boolean} true if the value is in an object in the array, false
+     *     otherwise.
+     */
+    _checkForContainmentInObjectArray: function(key, value, arr) {
+        if (!arr) return false;
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i][key] === value) return true;
+        }
+        return false;
+    },
+
+    /**
+     * Determines if the search yielded sound recording assets.
+     * @return {boolean} Whether or not there are sound recording assets.
+     */
+    srExists: function() {
+        return searchApp.getCount(true, false) > 0;
+    },
+
+    /**
+     * Determines if the search yielded composition assets.
+     * @return {boolean} Whether or not there are composition assets.
+     */
+    compExists: function() {
+        return searchApp.isIsrcSearch && searchApp.getCount(false, false);
+    },
+
+    /**
+     * Makes an array with only the first {size} number of elements in {arr}.
+     * @param {?Array<TYPE>} arr The array to limit.
+     * @param {number} size The new size of the array.
+     * @return {!Array<TYPE>} The new array of length {size}.
+     */
+    limitArrSize: function(arr, size) {
+        arr = arr || [];
+        if (arr.length > size) {
+            return arr.slice(0, size);
+        }
+        return arr;
+    },
+
+    /**
+     * Toggles the {collapsible} element and the icon on the {btn}.
+     * @param {paper-icon-button} btn The icon button triggering the toggle.
+     * @param {iron-collapse} collapsible The collapsible element being toggled.
+     */
+    toggleCollapsible: function(btn, collapsible) {
+        if (btn.icon === 'expand-more') {
+            btn.icon = 'expand-less';
+        } else {
+            btn.icon = 'expand-more';
+        }
+        collapsible.toggle();
+    },
+
+    /**
+     * Returns an array of {element} duplicated {size} times.
+     * @param {TYPE} element An element of any type to be duplicated.
+     * @param {number} size The length of the returned array.
+     * @return {Array<TYPE>} The array of the duplicated {element}.
+     */
+    duplicateElement: function(element, size) {
+        var arr = [];
+        for (var i = 0; i < size; i++) {
+            arr.push(element);
+        }
+        return arr;
+    },
+
+    /**
+     * Finds the union of two arrays.
+     * @param {!Array<TYPE>} arr1 The first array to be compared.
+     * @param {!Array<TYPE>} arr2 The second array to be compared.
+     * @return {!Array<TYPE>} The union of the two arrays.
+     */
+    getUnion: function(arr1, arr2) {
+        var union = [];
+        var tempObj = {};
+        for (var i = 0; i < arr1.length; i++) {
+            tempObj[arr1[i]] = true;
+        }
+        for (var i = 0; i < arr2.length; i++) {
+            tempObj[arr2[i]] = true;
+        }
+        for (var val in tempObj) {
+            if (tempObj.hasOwnProperty(val)) {
+                union.push(val);
+            }
+        }
+        return union;
+    },
+
+    /**
+     * Checks whether an item is in an array.
+     * @param {!Array<TYPE>} arr The array to check.
+     * @param {TYPE} item The item to check for.
+     * @return {boolean} Whether or not the item is in the array.
+     */
+    inArray: function(arr, item) {
+        return arr.indexOf(item) > -1;
+    },
+
+    /**
+     * Finds the total number of either sound recording or composition asset
+     *     versions.
+     * @param {string} assetType The asset type - either 'srAssets' for sound
+     *     recordings or 'compAssets' for compositions.
+     * @param {boolean} mine Whether or not to only count versions that belong
+     *     to the currently authorized content owner.
+     * @return {integer} The total number.
+     */
+    _countVersions: function(assetType, mine) {
+        var count = 0;
+        for (var id in assetsDisplay[assetType]) {
+            if (assetsDisplay[assetType].hasOwnProperty(id)) {
+                if (assetsDisplay[assetType][id] &&
+                assetsDisplay[assetType][id].items) {
+                    var versions = assetsDisplay[assetType][id].items;
+                    if (mine) {
+                        for (var i = 0; i < versions.length; i++) {
+                            if (versions[i].mine) {
+                                count++;
+                            }
+                        }
+                    } else {
+                        count += versions.length;
+                    }
+                }
+            }
+        }
+
+        return count;
+    },
+
+    /**
+     * Finds the total number of sound recording or composition results.
+     * @param {boolean} forSoundRecordings Whether or not to return the number
+     *     of sound recording results.
+     * @param {boolean} getTotalCount Whether or not to return the total number
+     *     of sound recordings found by the API for ISWC search.
+     * @return {integer} The total number of either sound recording or
+     *     composition results.
+     */
+    getCount: function(forSoundRecordings, getTotalCount) {
+        var count = 0;
+
+        // Returns the total number of assets found if requested.
+        if (getTotalCount && !searchApp.isIsrcSearch) {
+            count = DISPLAY_HANDLER.srAssetCount.totalCount;
+        } else {
+            var assetType = 'srAssets';
+            if (!forSoundRecordings) assetType = 'compAssets';
+            var mine = searchApp.isIsrcSearch && searchApp.showMine &&
+                forSoundRecordings;
+            count = searchApp._countVersions(assetType, mine);
+        }
+
+        return count;
+    },
+
+    /**
+     * Returns the number of sound recording "groups". The group number is the
+     * number of asset ID's displayed for ISRC search or the number of pages for
+     * ISWC search.
+     * @return {integer} The number of sound recording groups.
+     */
+    getSrGroupCount: function() {
+        if (searchApp.showMine && searchApp.isIsrcSearch) {
+            return ISRC_HANDLER.mySrVersionIds.length;
+        }
+        return Object.keys(assetsDisplay.srAssets).length;
+    },
+
+    /**
+     * Opens pop up alert dialog with text content of {text}.
+     * @param {string} text The text to be displayed in the alert.
+     */
+    openAlert: function(text) {
+        document.getElementById('paper-dialog-text').innerHTML = text;
+        document.getElementById('paper-dialog').open();
+    },
+
+    /**
+     * Resets all properties and HTML elements in preparation for a new search.
+     */
+    resetInfo: function() {
+        // Reset properties and globals
+        CSV_EXPORT.srJsonArr = [];
+        CSV_EXPORT.compJsonArr = [];
+        assetsDisplay.srAssets = {};
+        assetsDisplay.compAssets = {};
+        DISPLAY_HANDLER.srAssetCount = {};
+        ISRC_HANDLER.fullOwnershipStrMap = {};
+        ISRC_HANDLER.mySrVersionIds = [];
+        ISWC_HANDLER.srRemainingAssets = [];
+
+        // Reset HTML elements
+        var blankElementIds = ['sr-header', 'comp-header', 'sr-subheader',
+            'sr-subheader2', 'sr-subheader3', 'comp-subheader',
+            'load-all-text'];
+        blankElementIds.forEach(function(id) {
+            document.getElementById(id).innerHTML = '';
+        });
+        var removeElementIds = ['finished-loading-tooltip',
+            'sr-load-more-footer', 'sr-export', 'comp-export',
+            'toggle-sr-assets', 'toggle-comp-assets'];
+        removeElementIds.forEach(function(id) {
+            document.getElementById(id).style.display = 'none';
+        });
+        assetsDisplay.resetAssetCollapsibles();
+    },
+
+    /***************************End Helper Methods****************************/
+
+    /***************************HTML Helper Methods****************************/
+
+    /**
+     * Clears the search history of the user.
+     * @param{MouseEvent} e The click event (not used).
+     */
+    clearSearchHistory: function(e) {
+        LOCAL_STORAGE.clearSearchHistory();
+    },
+
+    /**
+     * Prompts the user to choose the content owner they wish to search on
+     * behalf of.
+     */
+    chooseContentOwner: function() {
+        document.getElementById('content-owner-dialog').open();
+        document.getElementById(
+            'switch-content-owners').style.display = "block";
+    },
+
+    /************************End HTML Helper Methods***************************/
+
+});
+
+</script>
+
+</dom-module>

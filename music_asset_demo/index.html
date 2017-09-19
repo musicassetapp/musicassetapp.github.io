@@ -1,0 +1,35 @@
+<!--
+This file provides basic HTML information, imports, and base styles. It then
+initiates search-app.html, the main file of the application.
+-->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+    <meta name="theme-color" content="#e52d27">
+
+    <title>Asset Demo</title>
+
+
+    <script src="./bower_components/webcomponentsjs/webcomponents-loader.js"></script>
+
+    <link rel="import" href="./src/yt-search-app.html">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Roboto', sans-serif;
+        background-color: #f5f5f5;
+      }
+    </style>
+
+  </head>
+  <body>
+
+    <yt-search-app unresolved></yt-search-app>
+
+  </body>
+</html>

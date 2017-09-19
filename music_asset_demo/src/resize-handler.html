@@ -1,0 +1,334 @@
+<!--
+This file defines a class with methods that facilitate the resizing of various
+UI elements when the window size changes.
+-->
+
+<script>
+
+/** Class to handle resizing. */
+class ResizeHandler {
+
+     constructor () {
+        /**
+         * The HTML class for asset cards determining the number of cards per
+         * row. Refer to https://github.com/The5heepDev/iron-grid for more
+         * information.
+         * @type{string}
+         */
+        this.gridClass = 's4';
+
+        /**
+         * The current window size (width).
+         * @type{integer}
+         */
+        this.wSize = 0;
+     }
+
+    /**
+     * Sets the text size of an element to a pre-determined size.
+     * @param {string} id ID of the element to change.
+     */
+    _makeTextSizeSmall(id) {
+        var minimum = 10;
+        var maximum = 13;
+        var divisor = 65;
+
+        var textSize = this._makeTextSize(minimum, maximum, divisor);
+        document.getElementById(id).style.fontSize = textSize;
+    }
+
+    /**
+     * Sets the text size of an element to a pre-determined size.
+     * @param {string} id ID of the element to change.
+     */
+    _makeTextSizeRegular(id) {
+        var minimum = 10;
+        var maximum = 17;
+        var divisor = 50;
+
+        var textSize = this._makeTextSize(minimum, maximum, divisor);
+        document.getElementById(id).style.fontSize = textSize;
+    }
+
+    /**
+     * Sets the text size of an element to a pre-determined size.
+     * @param {string} id ID of the element to change.
+     */
+    _makeTextSizeLarge(id) {
+        var minimum = 17;
+        var maximum = 40;
+        var divisor = 20;
+
+        var textSize = this._makeTextSize(minimum, maximum, divisor);
+        document.getElementById(id).style.fontSize = textSize;
+    }
+
+    /**
+     * Makes a CSS-formatted text size based on the window size.
+     * @param {integer} minimum The minimum text size.
+     * @param {integer} maximum The maximum text size.
+     * @param {integer} divisor The number to divide the window size by to
+     *     calculate the text size.
+     * @result {string} The CSS-formatted text size.
+     */
+    _makeTextSize(minimum, maximum, divisor) {
+        var textSize = this.wSize / divisor;
+        var lowerCapped = Math.max(minimum, textSize);
+        var upperCapped = Math.min(maximum, lowerCapped);
+        return upperCapped.toString() + 'px';
+    }
+
+    /**
+     * Resizes the sign in/out button depending on window size.
+     */
+    _resizeSignIn() {
+        this._makeTextSizeRegular('sign-in');
+        this._makeTextSizeRegular('sign-out');
+    }
+
+    /**
+     * Resizes the 'Music Asset Search' title depending on window size.
+     */
+    _resizeTitle() {
+        this._makeTextSizeLarge('title');
+    }
+
+    /**
+     * Resizes the submit button depending on window size.
+     */
+    _resizeSubmit() {
+        this._makeTextSizeRegular('submit');
+    }
+
+    /**
+     * Resizes the select all button depending on window size. Moves it above
+     * the other text if there's no room.
+     */
+    _resizeSelectAll() {
+        var smallerSelectAll = document.getElementById('smaller-btn');
+        var largerSelectAll = document.getElementById('larger-btn');
+        var limit = 500;
+
+        // If there's no room left and it hasn't already been moved, moves
+        // the select all button to a designated spot.
+        if (this.wSize < limit && largerSelectAll.innerHTML) {
+            smallerSelectAll.innerHTML = largerSelectAll.innerHTML;
+            largerSelectAll.innerHTML = '';
+        } else if (this.wSize >= limit && smallerSelectAll.innerHTML) {
+            largerSelectAll.innerHTML = smallerSelectAll.innerHTML;
+            smallerSelectAll.innerHTML = '';
+        }
+
+        document.getElementById('select-all').onclick = (
+            searchForm.selectAllCheckboxes);
+        this._makeTextSizeRegular('select-all');
+    }
+
+    /**
+     * Resizes the clear history button depending on window size.
+     */
+    _resizeHistory() {
+        this._makeTextSizeSmall('clear-history');
+    }
+
+    /**
+     * Resizes the switch content owners button depending on window size.
+     */
+    _resizeContentOwners() {
+        this._makeTextSizeSmall('switch-content-owners');
+    }
+
+    /**
+     * Resizes the export buttons for sound recording and composition results
+     * depending on window size.
+     */
+    _resizeExports() {
+        this._makeTextSizeSmall('sr-export');
+        this._makeTextSizeSmall('comp-export');
+    }
+
+    /**
+     * Resizes the export icon for sound recording and composition results
+     * depending on window size.
+     */
+    _resizeIcon() {
+        var minimum = 15;
+        var maximum = 20;
+        var divisor = 50;
+
+        var srIcon = document.getElementById('sr-icon');
+        var compIcon = document.getElementById('comp-icon');
+
+        srIcon.style.height = this._makeTextSize(minimum, maximum, divisor);
+        compIcon.style.height = this._makeTextSize(minimum, maximum, divisor);
+    }
+
+    /**
+     * Resizes the sound recording and composition headers depending on whether
+     *     there were results or not.
+     */
+    resizeHeaders() {
+        var srHeader = document.getElementById('sr-header');
+        var compHeader = document.getElementById('comp-header');
+        var minimum = 15;
+        var maximum = 24;
+        var divisor = 45;
+
+        if (!searchApp.srExists()) {
+            srHeader.style.fontSize = this._makeTextSize(
+                minimum, maximum, divisor);
+        }
+        if (!searchApp.compExists()) {
+            compHeader.style.fontSize = this._makeTextSize(
+                minimum, maximum, divisor);
+        }
+    }
+
+    /** Changes the grid size of the cards. */
+    changeGridSize() {
+        var cards = document.getElementsByClassName('asset-card');
+        var totalAssetCount = (searchApp.getCount(true, false) +
+            searchApp.getCount(false, false));
+
+        // Change grid size only if all cards have loaded.
+        if (cards.length > 0 && cards.length == totalAssetCount) {
+            for (var i = 0; i < cards.length; i++) {
+                cards[i].classList.remove('s4');
+                cards[i].classList.remove('s6');
+                cards[i].classList.remove('s12');
+                cards[i].classList.remove('s4-important');
+                cards[i].classList.remove('s6-important');
+                cards[i].classList.remove('s12-important');
+                cards[i].classList.add(this.gridClass);
+            }
+        }
+    }
+
+    /**
+     * Changes the number of cards per row depending on the window size.
+     */
+    _resizeCards() {
+        var threeToTwo = 1750;
+        var twoToOne = 1250;
+
+        // Checks which range wSize is in and changes the cards per row
+        // if the range has changed.
+        if (this.gridClass !== 's12' && this.wSize < twoToOne) {
+            this.gridClass = 's12';
+            this.changeGridSize();
+        } else if (this.gridClass !== 's6' && this.wSize >= twoToOne &&
+            this.wSize < threeToTwo) {
+            this.gridClass = 's6';
+            this.changeGridSize();
+        } else if (this.gridClass !== 's4' && this.wSize >= threeToTwo) {
+            this.gridClass = 's4';
+            this.changeGridSize();
+        }
+    }
+
+    /**
+     * Changes the number of checkboxes per row depending on the window size.
+     */
+    _resizeCheckboxes(wSize) {
+        var eightToFour = 1800;
+        var fourToTwo = 1200;
+        var twoToOne = 900;
+        var checkboxCols = CHECKBOX_TABLE_HANDLER.checkboxCols;
+
+        // Checks which range wSize is in and changes the checkboxes per row
+        // if the range has changed.
+        if (this.wSize < twoToOne && checkboxCols !== '1') {
+            CHECKBOX_TABLE_HANDLER.changeTableSize(checkboxCols, '1');
+        } else if (this.wSize >= twoToOne && this.wSize < fourToTwo &&
+            checkboxCols !== '2') {
+            CHECKBOX_TABLE_HANDLER.changeTableSize(checkboxCols, '2');
+        }else if (this.wSize >= fourToTwo && this.wSize < eightToFour &&
+            checkboxCols !== '4') {
+            CHECKBOX_TABLE_HANDLER.changeTableSize(checkboxCols, '4');
+        } else if (this.wSize >= eightToFour && checkboxCols !== '8') {
+            CHECKBOX_TABLE_HANDLER.changeTableSize(checkboxCols, '8');
+        }
+    }
+
+    /**
+     * Select the text of the element with ID {id} based on window size.
+     * @param {string} id The ID of the element to be changed.
+     * @param {integer} limit The window size limit.
+     * @param {string} smallerText The abbreviated text.
+     * @param {string} largerText The full text.
+     */
+    selectText(id, limit, smallerText, largerText) {
+        var element = document.getElementById(id);
+
+        if (this.wSize < limit) {
+            element.innerHTML = smallerText;
+        } else {
+            element.innerHTML = largerText;
+        }
+    }
+
+    /**
+     * Changes the text of the 'only show mine' checkbox if the window size
+     * is below a certain limit. Moves the checkbox if there isn't enough
+     * space.
+     */
+    _resizeCheckboxMine() {
+        var limit = 900;
+        var text = 'Only show my sound recording versions';
+        var shortText = 'Only show mine';
+        this.selectText('show-mine-text', limit, shortText, text);
+
+        limit = 600;
+        var largerCheck = document.getElementById('larger-mine-checkbox');
+        var smallerCheck = document.getElementById('smaller-mine-checkbox');
+        var checkbox = document.getElementById('show-mine-checkbox');
+        var tooltip = document.getElementById('tooltip-div');
+        if (this.wSize < limit && largerCheck.innerHTML) {
+            smallerCheck.append(checkbox);
+            smallerCheck.append(tooltip);
+            largerCheck.innerHTML = '';
+        } else if (this.wSize >= limit && smallerCheck.innerHTML) {
+            largerCheck.append(checkbox);
+            largerCheck.append(tooltip);
+            smallerCheck.innerHTML = '';
+        }
+    }
+
+    /**
+     * Replaces the 'advanced search' text with 'advanced' if the window is too
+     * small.
+     */
+    _resizeAdvancedSearch() {
+        var limit = 700;
+        var text = 'Advanced Search';
+        var shortText = 'Advanced';
+        this.selectText('advanced-search', limit, shortText, text);
+    }
+
+    /**
+     * Calculates the new window width on resize and calls resizing functions.
+     */
+    resizeAll() {
+        this.wSize = (window.innerWidth || document.documentElement.clientWidth
+            || document.body.clientWidth);
+        if (!document.getElementById('spinner').active) {
+            this.resizeHeaders();
+            DISPLAY_HANDLER.showSubheaders();
+        }
+
+        this._resizeSignIn();
+        this._resizeTitle();
+        this._resizeSubmit();
+        this._resizeSelectAll();
+        this._resizeCards();
+        this._resizeHistory();
+        this._resizeContentOwners();
+        this._resizeExports();
+        this._resizeIcon();
+        this._resizeCheckboxes();
+        this._resizeCheckboxMine();
+        this._resizeAdvancedSearch();
+    }
+}
+
+</script>

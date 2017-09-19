@@ -1,0 +1,81 @@
+<!--
+This file defines a Polymer module containing the template for the loading
+spinner as well as related properties and methods for it.
+-->
+
+<link rel="import" href="../bower_components/paper-spinner/paper-spinner.html">
+<link rel="import" href="./yt-shared-styles.html">
+
+<dom-module id="yt-loading-spinner">
+
+<template>
+
+  <style include="yt-shared-styles"></style>
+
+  <paper-spinner id="spinner"></paper-spinner>
+
+</template>
+
+<script>
+
+window.addEventListener('WebComponentsReady', function(e) {
+    // Executed when the Polymer WebComponents finish loading.
+    loadingSpinner = document.getElementById('loading-spinner');
+});
+
+Polymer({
+
+    is: 'yt-loading-spinner',
+
+    properties: {
+
+        /** ID's of elements to disable while the loading spinner is spinning */
+        idsToDisable: {
+            type: Array,
+            value: ['search-input', 'search-type', 'submit',
+                'toggle-checkboxes', 'clear-history', 'select-all', 'sign-out'],
+        },
+
+    },
+
+    /** Starts the loading spinner and disables various UI elements. */
+    startLoadingSpinner: function() {
+        // Disable UI elements that should not be interacted with during search.
+        loadingSpinner.idsToDisable.forEach(function(id) {
+            document.getElementById(id).disabled = true;
+        });
+
+        var checkboxes = document.getElementsByClassName('checkbox');
+        for (var i = 0; i < checkboxes.length; i++) {
+            checkboxes[i].disabled = true;
+        }
+
+        // Start the loading spinner.
+        document.getElementById('page').classList.add('fade');
+        document.getElementById('spinner-container').style.display = 'block';
+        document.getElementById('spinner').active = true;
+    },
+
+    /** Stops the loading spinner and re-enables the UI elements. */
+    stopLoadingSpinner: function() {
+        // Re-enable UI elements.
+        loadingSpinner.idsToDisable.forEach(function(id) {
+            document.getElementById(id).disabled = false;
+        });
+
+        var checkboxes = document.getElementsByClassName('checkbox');
+        for (var i = 0; i < checkboxes.length; i++) {
+            checkboxes[i].disabled = false;
+        }
+
+        // Stop the loading spinner.
+        document.getElementById('page').classList.remove('fade');
+        document.getElementById('spinner-container').style.display = 'none';
+        document.getElementById('spinner').active = false;
+    },
+
+});
+
+</script>
+
+</dom-module>

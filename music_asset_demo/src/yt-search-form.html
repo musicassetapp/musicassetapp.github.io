@@ -1,0 +1,289 @@
+<!--
+This file defines a Polymer module containing the template for the search card
+(including the dropdown, input, and 'Advanced Search' checkboxes) as well as
+properties and methods relating to the template elements.
+-->
+
+<link rel="import" href="../bower_components/iron-a11y-keys/iron-a11y-keys.html">
+<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
+<link rel="import" href="../bower_components/iron-icon/iron-icon.html">
+<link rel="import" href="../bower_components/iron-icons/iron-icons.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-card/paper-card.html">
+<link rel="import" href="../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../bower_components/paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../bower_components/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-item/paper-item.html">
+<link rel="import" href="../bower_components/paper-listbox/paper-listbox.html">
+<link rel="import" href="../bower_components/paper-tooltip/paper-tooltip.html">
+<link rel="import" href="../bower_components/paper-autocomplete/paper-autocomplete-suggestions.html">
+<link rel="import" href="./yt-shared-styles.html">
+
+<dom-module id="yt-search-form">
+
+<template>
+
+  <style include="yt-shared-styles"></style>
+
+  <!-- Key press event to submit form on press of "enter" key -->
+  <iron-a11y-keys id="a11y" keys="enter" target="[[form]]" on-keys-pressed="submitSearch"></iron-a11y-keys>
+
+  <form is="iron-form" id="form">
+
+    <paper-card class="search-card">
+      <div class="layout horizontal center-justified">
+
+        <!-- Drop-down menu to select search type -->
+        <paper-dropdown-menu id="search-type" label="Type" name="type">
+          <paper-listbox class="dropdown-content" selected={{selectedTypeIndex}} slot="dropdown-content">
+            <paper-item>ISRC</paper-item>
+            <paper-item>ISWC</paper-item>
+          </paper-listbox>
+        </paper-dropdown-menu>
+
+        <!-- Search input box and the autocomplete suggestions -->
+        <div id="search-container">
+          <paper-input id="search-input" always-float-label label="Search...">
+            <iron-icon icon="search" slot="prefix"></iron-icon>
+          </paper-input>
+          <paper-autocomplete-suggestions id="autocomplete" for="search-input" source="[[suggestions]]"></paper-autocomplete-suggestions>
+        </div>
+        <paper-button id="submit" raised on-tap="submitSearch">Submit</paper-button>
+      </div>
+      <div class="layout horizontal center" style="margin-top: 10px;">
+        <div class="layout horizontal center flex">
+          <div class="subheader" id="advanced-search">Advanced Search</div>
+          <paper-icon-button id="toggle-checkboxes" icon="expand-more" on-tap="toggleCheckboxes"></paper-icon-button>
+        </div>
+
+        <!-- Checkbox option to only show sound recording versions owned by the authorized content owner -->
+        <div>
+          <div id="larger-mine-checkbox" class="layout horizontal center">
+            <paper-checkbox id="show-mine-checkbox" class="checkbox" style="margin-right: 10px; font-weight: lighter;">
+              <div id="show-mine-text">Only show my sound recording versions</div>
+            </paper-checkbox>
+            <div tabindex="0" id="tooltip-div">
+              <iron-icon id='show-mine-icon' icon="icons:help-outline"></iron-icon>
+              <paper-tooltip id='show-mine-tooltip' class="tooltip" position="right">This displays only the versions of sound recording assets owned by the
+              content owner linked to your account for ISRC search. Compositions and sound recordings in ISWC search are displayed with reconciled metadata,
+              so we cannot show only your versions for those.</paper-tooltip>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="smaller-mine-checkbox" class="layout horizontal center"></div>
+
+      <!-- Advanced search metadata checkboxes -->
+      <iron-collapse id="checkboxes-collapsible">
+        <div id="smaller-btn"></div>
+        <div class="layout horizontal">
+          <div class="flex">
+            <table class="checkbox-table" id="checkbox-table" style="width: 90%;">
+              <tr id="row1"><td colspan="8" style="padding-bottom:0">
+                <div class="subheader checkbox-subheader">Choose metadata you wish to see for all sound recording asset versions:</div>
+              </td></tr>
+              <tr id="row2">
+                <td class="srCheck"><paper-checkbox id="artist-checkbox" class="checkbox" checked>Artist</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="album-checkbox" class="checkbox" checked>Album</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="upc-checkbox" class="checkbox" checked>UPC</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="record-label-checkbox" class="checkbox" checked>Record Label</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="grid-checkbox" class="checkbox" checked>Grid</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="genre-checkbox" class="checkbox" checked>Genre</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="source-checkbox" class="checkbox" checked>Source</paper-checkbox></td>
+                <td class="srCheck"><paper-checkbox id="owner-checkbox" class="checkbox" checked>Owner</paper-checkbox></td>
+              </tr>
+              <tr id="row10"><td colspan="8" style="padding-bottom:0">
+                <div class="subheader checkbox-subheader">Choose metadata you wish to see for your sound recording asset versions:</div>
+              </td></tr>
+              <tr id="row11">
+                <td class="srCheckMine"><paper-checkbox id="custom-id-checkbox" class="checkbox" checked>Custom ID</paper-checkbox></td>
+                <td class="srCheckMine"><paper-checkbox id="notes-checkbox" class="checkbox" checked>Notes</paper-checkbox></td>
+                <td class="srCheckMine"><paper-checkbox id="territory-checkbox" class="checkbox" checked>Territories</paper-checkbox></td>
+                <td class="srCheckMine"><paper-checkbox id="territory-conflict-checkbox" class="checkbox" checked>Territory Conflicts</paper-checkbox></td>
+              </tr>
+              <tr id="row15"><td colspan="8" style="padding-bottom:0">
+                <div class="subheader checkbox-subheader">Choose metadata you wish to see for composition assets:</div>
+              </td></tr>
+              <tr id="row16">
+                <td class="compCheck"><paper-checkbox id="hfa-checkbox" class="checkbox" checked>HFA</paper-checkbox></td>
+                <td class="compCheck"><paper-checkbox id="writers-checkbox" class="checkbox" checked>Writers</paper-checkbox></td>
+                <td class="compCheck"><paper-checkbox id="labels-checkbox" class="checkbox" checked>Labels</paper-checkbox></td>
+              </tr>
+            </table>
+          </div>
+          <div id="larger-btn">
+            <paper-button id="select-all" raised style="word-wrap: break-word;" on-tap="selectAllCheckboxes">Select all</paper-button>
+          </div>
+        </div>
+      </iron-collapse>
+    </paper-card>
+  </form>
+
+</template>
+
+<script>
+
+window.addEventListener('WebComponentsReady', function(e) {
+    // Executed when the Polymer WebComponents finish loading.
+    searchForm = document.getElementById('search-form');
+    searchForm.addInputFocusListener();
+});
+
+Polymer({
+
+    is: 'yt-search-form',
+
+    properties: {
+        /**
+         * Index of the search type selected bound to the dropdown menu (0 for
+         * ISRC search, 1 for ISWC search).
+         */
+        selectedTypeIndex: {
+            type: Number,
+            value: 0,
+        },
+
+        /**
+         * Array of suggestion objects to be given as autocomplete suggestions
+         * in the search box. See https://www.webcomponents.org/element/
+         * ellipticaljs/paper-autocomplete/elements/paper-autocomplete-
+         * suggestions for more information.
+         */
+        suggestions: {
+            type: Array,
+            value: [],
+        },
+
+        /**
+         * Object that returns the search form used to submit the form on press
+         * of the enter key while it is in focus.
+         */
+        form: {
+            type: Object,
+            value: function() {
+                return this.$.form;
+            }
+        },
+    },
+
+    /*************************Click Handling Methods***************************/
+
+    /**
+     * Submits the search after performing some presubmit procedures (error
+     * checking, writing to local storage, resetting information)
+     */
+    submitSearch: function() {
+        var searchInput = document.getElementById('search-input');
+        searchInput.value = searchInput.value.trim();
+        var searchValue = searchInput.value;
+        CSV_EXPORT.searchValue = searchValue;
+        searchApp.isIsrcSearch = assetsDisplay.getIsIsrcSearch();
+        searchApp.showMine = assetsDisplay.isChecked('show-mine-checkbox');
+
+        if (searchApp.showMine) {
+            assetsDisplay.myAssetCardClasses = 'asset-card s4 layout vertical';
+        } else {
+            assetsDisplay.myAssetCardClasses = (
+                'asset-card red-asset-card s4 layout vertical');
+        }
+
+        if (!ERROR_HANDLER.hasQueryError(searchValue)) {
+            LOCAL_STORAGE.writeToLocalStorage(searchValue);
+            searchApp.resetInfo();
+            loadingSpinner.startLoadingSpinner();
+            if (searchApp.isIsrcSearch) {
+                API_CALLS.isrcAssetSearch(
+                    ISRC_HANDLER.handleIsrcAssetSearch, searchValue);
+            } else {
+                API_CALLS.iswcAssetSearch(
+                    ISWC_HANDLER.handleIswcAssetSearch, searchValue);
+            }
+        }
+    },
+
+    /** Toggle the collapsible with the 'Advanced Search' checkboxes. */
+    toggleCheckboxes: function() {
+        var btn = document.getElementById('toggle-checkboxes');
+        var collapsible = document.getElementById('checkboxes-collapsible');
+        searchApp.toggleCollapsible(btn, collapsible);
+    },
+
+    /** Select (check) all of the 'Advanced Search' metadata checkboxes. */
+    selectAllCheckboxes: function() {
+        var checkboxes = document.getElementsByClassName('checkbox');
+        for (var i = 0; i < checkboxes.length; i++) {
+            var checkbox = checkboxes[i];
+            if (checkbox.id !== 'show-mine-checkbox') {
+                checkbox.checked = true;
+            }
+        }
+    },
+
+    /***********************End Click Handling Methods*************************/
+
+    /****************************Listener Methods******************************/
+
+    /**
+     * Adds listener to the search type dropdown menu to detect when the
+     * selected type changes.
+     */
+    addSearchTypeListener: function() {
+        var typeDropdown = document.getElementById('search-type');
+        typeDropdown.addEventListener('value-changed',
+            searchForm._onSearchTypeChange);
+
+        // Set search suggestions initally for ISRC search (selected search type
+        // always starts out as ISRC).
+        LOCAL_STORAGE.setSearchSuggestions(true);
+    },
+
+    /**
+     * Triggers when the selected search type changes and sets search
+     * suggestions based on the search type.
+     * @param {Event} e The search type change event.
+     */
+    _onSearchTypeChange: function(e) {
+        var type = e.detail.value;
+        LOCAL_STORAGE.setSearchSuggestions(type === 'ISRC');
+    },
+
+    /**
+     * Adds listener to the search input box to detect when its focus changes.
+     */
+    addInputFocusListener: function() {
+        var searchInput = document.getElementById('search-input');
+        searchInput.addEventListener('focused-changed',
+            searchForm._onInputFocusChange);
+    },
+
+    /**
+     * Triggers when the search input box's focus changes and displays a full
+     * search history if it is in focus.
+     * @param {Event} e The search input box focus change event.
+     */
+    _onInputFocusChange: function(e) {
+        var focused = e.detail.value;
+        var autocomplete = document.getElementById('autocomplete');
+
+        // In focus means the user just clicked on the search box.
+        if (focused) {
+            // Force autocomplete suggestions to open and display full history.
+            autocomplete.suggestions(searchForm.suggestions);
+            autocomplete.isOpen = true;
+        }
+        // Out of focus means the user clicked away from the search box.
+        else {
+            // Force autocomplete suggestions to close.
+            autocomplete.suggestions([]);
+            autocomplete.isOpen = false;
+        }
+    },
+
+    /**************************End Listener Methods****************************/
+
+});
+
+</script>
+
+</dom-module>

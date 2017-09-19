@@ -1,0 +1,661 @@
+<!--
+This file defines a Polymer module containing the template for displaying sound
+recording and composition assets as well as related properties and methods for those template
+elements.
+-->
+
+<link rel="import" href="../bower_components/iron-collapse/iron-collapse.html">
+<link rel="import" href="../bower_components/iron-icon/iron-icon.html">
+<link rel="import" href="../bower_components/iron-icons/iron-icons.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-card/paper-card.html">
+<link rel="import" href="../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../bower_components/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../bower_components/paper-tooltip/paper-tooltip.html">
+<link rel="import" href="../bower_components/iron-grid/iron-grid.html">
+<link rel="import" href="./yt-shared-styles.html">
+
+<dom-module id="yt-assets-display">
+
+<template>
+
+  <style include="yt-shared-styles"></style>
+
+  <!--*****************************************************************************************************
+
+                                         SOUND RECORDING ASSETS
+
+  ******************************************************************************************************-->
+
+  <!-- Header section for sound recording assets -->
+  <div class="layout horizontal center">
+    <div class="flex">
+      <div class="layout horizontal">
+        <div id="sr-header" class="header"><h3></h3></div>
+        <paper-icon-button id="toggle-sr-assets" class="toggle-assets" icon="expand-less" style="display: none;"></paper-icon-button>
+      </div>
+      <div id="sr-subheader" class="subheader"><h4></h4></div>
+      <div class="layout horizontal center">
+        <div id="sr-subheader2" class="subheader" style="margin-right: 5px;"><h4></h4></div>
+        <div tabindex="0" id="finished-loading-tooltip" style="display: none;">
+          <iron-icon icon="icons:help-outline"></iron-icon>
+            <paper-tooltip class="tooltip" position="bottom">The number of assets displayed may not match the total amount found because a) the API only
+            returns a maximum of 500 results and b) some results are excluded due to missing metadata.</paper-tooltip>
+        </div>
+      </div>
+      <div class="layout horizontal">
+        <div id="sr-subheader3" class="subheader"><h4></h4></div>
+        <div id="load-all-text"></div>
+      </div>
+    </div>
+    <paper-button id="sr-export" class="export" raised style="display: none">
+      <iron-icon id='sr-icon' icon="icons:file-download"></iron-icon>
+      Export as CSV
+    </paper-button>
+  </div>
+
+  <iron-collapse id="sr-assets-collapsible" opened="true">
+    <template is="dom-repeat" items="{{toArray(srAssets)}}" as="asset">
+      <template is="dom-if" if="{{getIsIsrcSearch()}}">
+        <template is="dom-if" if="{{shouldDisplayAsset(asset)}}">
+
+          <!-- Result subheader to display for ISRC search (asset ID of sound recording) -->
+          <div class="layout horizontal">
+            <div class="results-subheader">S.R. Asset ID: {{asset.key}}</div>
+            <paper-icon-button id="temp-toggle-id" class="toggle-versions" icon="expand-less"></paper-icon-button>
+          </div>
+          <script>
+          // Change the ID of the sound recording collapsible toggle
+          // button based on index.
+          var currBtn = document.getElementById('temp-toggle-id');
+          currBtn.id = 'sr-toggle-versions' + {{index}};
+          assetsDisplay.addVersionCollapsibleToggleListeners();
+          </script>
+        </template>
+      </template>
+      <template is="dom-if" if="{{!getIsIsrcSearch()}}">
+
+        <!-- Result subheader to display for ISWC search (page number with number of results) -->
+        <div class="layout horizontal">
+          <div class="results-subheader" id="results-text">Results {{asset.value.pageStart}}-{{asset.value.pageEnd}}:</div>
+          <paper-icon-button id="temp-toggle-id" class="toggle-versions" icon="expand-less"></paper-icon-button>
+        </div>
+        <script>
+        // Change the result subheader text if only one result found.
+        var resultsText = document.getElementById('results-text');
+        if ({{asset.value.pageStart}} == {{asset.value.pageEnd}}) {
+            resultsText.innerHTML = 'Result ' +
+                {{asset.value.pageStart}} + ':';
+        }
+
+        // Change the ID of the sound recording collapsible toggle
+        // button based on index.
+        var currBtn = document.getElementById('temp-toggle-id');
+        currBtn.id = 'sr-toggle-versions' + {{index}};
+
+        assetsDisplay.addVersionCollapsibleToggleListeners();
+        </script>
+      </template>
+      <template is="dom-if" if="{{shouldDisplayAsset(asset)}}">
+        <iron-collapse id="temp-collapsible-id" class="versions-collapsible" opened="true">
+          <iron-grid>
+            <template is="dom-repeat" items="{{asset.value.items}}" as="version">
+              <template is="dom-if" if="{{version.mine}}">
+
+                <!-- Asset version card if version is owned by the authorized content owner -->
+                <paper-card class$="{{myAssetCardClasses}}" style="display:inline-block;">
+
+                  <!-- Title of the asset version -->
+                  <div class="horizontal layout center">
+                    <div class="asset-info info flex">
+                      <p>{{characterLimit(version.title, 80)}}</p>
+                    </div>
+                    <template is="dom-if" if="{{!getShowMine()}}">
+                      <div tabindex="0">
+                        <iron-icon icon="icons:help-outline"></iron-icon>
+                        <paper-tooltip class="tooltip" position="top">This version is highlighted because it belongs to you.</paper-tooltip>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- Remaining metadata of the asset version -->
+                  <div class="asset-info description" style="display:inline-block;">
+                    <table class="table-for-word-break">
+                      <template is="dom-if" if="{{isChecked('artist-checkbox')}}">
+                        <tr><td><strong>Artist:</strong> {{characterLimit(version.artists, 60)}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('album-checkbox')}}">
+                        <tr><td><strong>Album:</strong> {{characterLimit(version.album, 60)}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('upc-checkbox')}}">
+                        <tr><td><strong>UPC:</strong> {{version.upc}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('record-label-checkbox')}}">
+                        <tr><td><strong>Record Label:</strong> {{characterLimit(version.recordLabel, 60)}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('grid-checkbox')}}">
+                        <tr><td><strong>Grid:</strong> {{version.grid}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('genre-checkbox')}}">
+                        <tr><td><strong>Genre:</strong> {{characterLimit(version.genres, 60)}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('source-checkbox')}}">
+                        <tr><td><strong>Source:</strong> {{version.source}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('owner-checkbox')}}">
+                        <tr><td><strong>Owner:</strong> {{version.owner}} (You)</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('territory-checkbox')}}">
+                        <template is="dom-if" if="{{displayingFullOwnership(version.id, version.territories, 'owned')}}">
+                          <tr><td><strong>Ownership Territories:</strong> {{version.territories}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{!displayingFullOwnership(version.id, version.territories, 'owned')}}">
+                          <tr><td>
+                            <div style="display: inline;"><strong>Ownership Territories:</strong> {{version.territories}}</div>
+                            <div on-tap="showFullOwnershipPopup" class="link" style="text-decoration: none; display: inline;"> See all</div>
+                          </td></tr>
+                        </template>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('territory-conflict-checkbox')}}">
+                        <template is="dom-if" if="{{displayingFullOwnership(version.id, version.territoryConflicts, 'conflicts')}}">
+                          <tr><td><strong>Territory Conflicts:</strong> {{version.territoryConflicts}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{!displayingFullOwnership(version.id, version.territoryConflicts, 'conflicts')}}">
+                          <tr><td>
+                            <div style="display: inline;"><strong>Territory Conflicts:</strong> {{version.territoryConflicts}}</div>
+                            <div on-tap="showFullConflictsPopup" class="link" style="text-decoration: none; display: inline;"> See all</div>
+                          </td></tr>
+                        </template>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('custom-id-checkbox')}}">
+                        <tr><td><strong>Custom ID:</strong> {{version.customId}}</td></tr>
+                      </template>
+                      <template is="dom-if" if="{{isChecked('notes-checkbox')}}">
+                        <tr><td><strong>Notes:</strong> {{characterLimit(version.notes, 60)}}</td></tr>
+                      </template>
+                    </table>
+                  </div>
+                </paper-card>
+                <script>
+                RESIZE_HANDLER.changeGridSize();
+                </script>
+              </template>
+
+              <!-- Asset version card if version is not owned by the authorized content owner -->
+              <template is="dom-if" if="{{!version.mine}}">
+                <template is="dom-if" if="{{shouldDisplayVersion()}}">
+                  <paper-card class="asset-card s4 layout vertical" style="display:inline-block;">
+
+                    <!-- For ISWC search, display ISRC, asset ID, and title at the top of the card -->
+                    <template is="dom-if" if="{{!getIsIsrcSearch()}}">
+                      <div class="asset-info info">
+                        <template is="dom-if" if="{{!isNA(version.isrc)}}">
+                          <p>ISRC: <a on-tap="linkISRCSearch" class="link">{{version.isrc}}</a></p>
+                        </template>
+                        <template is="dom-if" if="{{isNA(version.isrc)}}">
+                          <p>ISRC: {{version.isrc}}</p>
+                        </template>
+                        <p>{{version.id}}</p>
+                      </div>
+                      <div class="asset-info sub-info" style="display:inline-block;">
+                        <table class="table-for-word-break">
+                          <tr><td>{{characterLimit(version.title, 80)}}</td></tr>
+                        </table>
+                      </div>
+                    </template>
+
+                    <!-- For ISRC search, display only title at the top of the card -->
+                    <template is="dom-if" if="{{getIsIsrcSearch()}}">
+                      <div class="asset-info info" style="padding-bottom:none;">
+                          <p>{{characterLimit(version.title, 80)}}</p>
+                      </div>
+                    </template>
+
+                    <!-- Remaining metadata of the asset version -->
+                    <div class="asset-info description" style="display:inline-block;">
+                      <table class="table-for-word-break">
+                        <template is="dom-if" if="{{isChecked('artist-checkbox')}}">
+                          <tr><td><strong>Artist:</strong> {{characterLimit(version.artists, 60)}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('album-checkbox')}}">
+                          <tr><td><strong>Album:</strong> {{characterLimit(version.album, 60)}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('upc-checkbox')}}">
+                          <tr><td><strong>UPC:</strong> {{version.upc}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('record-label-checkbox')}}">
+                          <tr><td><strong>Record Label:</strong> {{characterLimit(version.recordLabel, 60)}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('grid-checkbox')}}">
+                          <tr><td><strong>Grid:</strong> {{version.grid}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('genre-checkbox')}}">
+                          <tr><td><strong>Genre:</strong> {{characterLimit(version.genres, 60)}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('source-checkbox')}}">
+                          <tr><td><strong>Source:</strong> {{version.source}}</td></tr>
+                        </template>
+                        <template is="dom-if" if="{{isChecked('owner-checkbox')}}">
+                          <template is="dom-if" if="{{getIsIsrcSearch()}}">
+                            <tr><td><strong>Owner:</strong> {{version.owner}}</td></tr>
+                          </template>
+                        </template>
+                      </table>
+                    </div>
+                  </paper-card>
+                  <script>
+                  RESIZE_HANDLER.changeGridSize();
+                  </script>
+                </template>
+              </template>
+            </template>
+          </iron-grid>
+        </iron-collapse>
+        <script>
+        // Change the ID of the sound recording version collapsible
+        // based on index.
+        var currExpandable = (
+            document.getElementById('temp-collapsible-id'));
+        currExpandable.id = 'sr-versions-collapsible' + {{index}};
+        assetsDisplay.addVersionCollapsibleToggleListeners();
+        </script>
+      </template>
+    </template>
+  </iron-collapse>
+  <div id="sr-load-more-footer" class="subheader"><h4></h4></div>
+
+  <!--*****************************************************************************************************
+
+                                             COMPOSITION ASSETS
+
+  ******************************************************************************************************-->
+
+  <!-- Header section for sound recording assets -->
+  <div class="layout horizontal center">
+    <div class="flex">
+      <div class="layout horizontal">
+        <div id="comp-header" class="header"><h3></h3></div>
+        <paper-icon-button id="toggle-comp-assets" class="toggle-assets" icon="expand-less" style="display: none;"></paper-icon-button>
+      </div>
+      <div id="comp-subheader" class="subheader"><h4></h4></div>
+    </div>
+    <paper-button id="comp-export" class="export" raised style="display: none">
+      <iron-icon id='comp-icon' icon="icons:file-download"></iron-icon>
+      Export as CSV
+    </paper-button>
+  </div>
+
+  <iron-collapse id="comp-assets-collapsible" opened="true">
+    <template is="dom-repeat" items="{{toArray(compAssets)}}" as="asset">
+
+      <!-- Results subheader showing the asset ID of the composition asset -->
+      <div class="layout horizontal">
+        <div class="results-subheader">Comp. Asset ID: {{asset.key}}</div>
+        <paper-icon-button id="temp-toggle-id" class="toggle-versions" icon="expand-less"></paper-icon-button>
+      </div>
+      <iron-collapse id="temp-collapsible-id" class="versions-collapsible" opened="true">
+        <iron-grid>
+          <template is="dom-repeat" items="{{asset.value.items}}">
+
+            <!-- Asset card for compositions -->
+            <paper-card class="asset-card s4" style="display: inline-block;">
+
+              <!-- ISWC of the asset shown at top -->
+              <template is="dom-if" if="{{!isNA(item.iswc)}}">
+                <p class="asset-info info">ISWC: <a on-tap="linkIswcSearch" class="link">{{item.iswc}}</a></p>
+              </template>
+              <template is="dom-if" if="{{isNA(item.iswc)}}">
+                <p class="asset-info info">ISWC: {{item.iswc}}</p>
+              </template>
+
+              <!-- Remaining metadata of the composition asset -->
+              <div class="asset-info description" style="display: inline-block">
+                <table class="table-for-word-break">
+                  <tr><td><strong>Title:</strong> {{characterLimit(item.title, 60)}}</td></tr>
+                  <template is="dom-if" if="{{isChecked('hfa-checkbox')}}">
+                    <tr><td><strong>HFA Sound Code:</strong> {{item.hfa}}</td></tr>
+                  </template>
+                  <template is="dom-if" if="{{isChecked('writers-checkbox')}}">
+                    <tr><td><strong>Writers:</strong> {{characterLimit(item.writers, 60)}}</td></tr>
+                  </template>
+                  <template is="dom-if" if="{{isChecked('labels-checkbox')}}">
+                    <tr><td><strong>Labels:</strong> {{characterLimit(item.label, 60)}}</td></tr>
+                  </template>
+                </table>
+              </div>
+            </paper-card>
+            <script>
+            RESIZE_HANDLER.changeGridSize();
+            </script>
+          </template>
+        </iron-grid>
+      </iron-collapse>
+      <script>
+      // Change the ID of composition version collapsible and toggle
+      // button based on index.
+      var currBtn = document.getElementById('temp-toggle-id');
+      currBtn.id = 'comp-toggle-versions' + {{index}};
+      var currExpandable = document.getElementById('temp-collapsible-id');
+      currExpandable.id = 'comp-versions-collapsible' + {{index}};
+      assetsDisplay.addVersionCollapsibleToggleListeners();
+      </script>
+    </template>
+  </iron-collapse>
+
+</template>
+
+<script>
+
+window.addEventListener('WebComponentsReady', function(e) {
+    // Executed when the Polymer WebComponents finish loading.
+    assetsDisplay = document.getElementById('assets-display');
+    assetsDisplay.addAssetCollapsibleToggleListeners();
+});
+
+Polymer({
+
+    is: 'yt-assets-display',
+
+    properties: {
+
+    /**
+     * Object mapping the asset ID of a sound recording asset to the
+     * versions under that ID (with a character limit on the metadata
+     * displayed).
+     */
+    srAssets: {
+        type: Object,
+        value: {},
+    },
+
+    /**
+     * Object mapping the page number to the composition assets displayed on
+     * that page (with a character limit on the metadata displayed).
+     */
+    compAssets: {
+        type: Object,
+        value: {},
+    },
+
+    /**
+     * String of the HTML classes belonging to an asset card for a version
+     * owned by the current content owner.
+     */
+    myAssetCardClasses: {
+        type: String,
+        value: 'asset-card red-asset-card s4 layout vertical',
+    },
+
+    },
+
+    /***************************Collapsible Methods**************************/
+
+    /**
+     * Adds click listeners to the icon buttons for toggling whether to display
+     * the sound recording or composition asset groups.
+     */
+    addAssetCollapsibleToggleListeners: function() {
+        var toggleSR = document.getElementById('toggle-sr-assets');
+        var srCollapsible = document.getElementById('sr-assets-collapsible');
+        var toggleComp = document.getElementById('toggle-comp-assets');
+        var compCollapsible = (
+            document.getElementById('comp-assets-collapsible'));
+
+        toggleSR.onclick = function() {
+            searchApp.toggleCollapsible(toggleSR, srCollapsible);
+        }
+        toggleComp.onclick = function() {
+            searchApp.toggleCollapsible(toggleComp, compCollapsible);
+        }
+    },
+
+    /**
+     * Adds click listeners to the icon buttons for toggling whether to display
+     * the versions of an asset.
+     */
+    addVersionCollapsibleToggleListeners: function() {
+        var btns = document.getElementsByClassName('toggle-versions');
+        var collapsibles = (
+            document.getElementsByClassName('versions-collapsible'));
+        var numAssets = (searchApp.getSrGroupCount() +
+            Object.keys(assetsDisplay.compAssets).length);
+
+        // Only add the listeners if all the buttons and collapsibles have
+        // loaded.
+        if (btns.length == numAssets && collapsibles.length == numAssets) {
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].onclick = function() {
+                    assetsDisplay._showVersions(this);
+                };
+
+                if (!searchApp.isIsrcSearch) {
+                    SCROLL_HANDLER.addCollapsibleTransitionListener(
+                        collapsibles[i]);
+                }
+            }
+        }
+    },
+
+    /**
+     * Toggles the collapsible for displaying versions of an asset corresponding
+     * to the index of the {btn}.
+     * @param {paper-icon-button} btn The icon button triggering the toggle.
+     */
+    _showVersions: function(btn) {
+        var index = btn.id.charAt(btn.id.length - 1);
+        var isSrBtn = searchApp.inArray(btn.id, 'sr');
+        if (isSrBtn) {
+            var collapsible = document.getElementById(
+                'sr-versions-collapsible' + index);
+        } else {
+            var collapsible = document.getElementById(
+                'comp-versions-collapsible' + index);
+        }
+        searchApp.toggleCollapsible(btn, collapsible);
+    },
+
+    /**
+     * Ensures that the sound recording and composition collapsibles are opened
+     * for a new search.
+     */
+    resetAssetCollapsibles: function() {
+        var toggleSR = document.getElementById('toggle-sr-assets');
+        var srCollapsible = document.getElementById('sr-assets-collapsible');
+        var toggleComp = document.getElementById('toggle-comp-assets');
+        var compCollapsible = (
+            document.getElementById('comp-assets-collapsible'));
+
+        if (!srCollapsible.opened) {
+            searchApp.toggleCollapsible(toggleSR, srCollapsible);
+        }
+        if (!compCollapsible.opened) {
+            searchApp.toggleCollapsible(toggleComp, compCollapsible);
+        }
+    },
+
+    /**************************End Collapsible Methods*************************/
+
+    /***************************HTML Helper Methods**************************/
+
+    /**
+     * Determines whether the most recent search was ISRC or ISWC.
+     * @return {boolean} True for ISRC, false for ISWC.
+     */
+    getIsIsrcSearch: function() {
+        var typeDropdown = document.getElementById('search-type');
+        return typeDropdown.selectedItem.textContent.trim() === 'ISRC';
+    },
+
+    /**
+     * Imposes a character limit on the phrase.
+     * @param {string} phrase The original phrase.
+     * @param {?integer} charLimit The character limit.
+     * @returns {string} phrase The phrase with the character limit.
+     */
+    characterLimit: function(phrase, charLimit) {
+        if (charLimit && (phrase.length > charLimit)) {
+            return phrase.slice(0, charLimit) + '...';
+        }
+        return phrase;
+    },
+
+    /**
+     * Performs automatic ISRC search from clicking the ISRC link in a
+     * sound recording asset card.
+     * @param {MouseEvent} e The click event.
+     */
+    linkISRCSearch: function(e) {
+        var srAssetVersion = e.model.version;
+        // Set the text of the search box to be the ISRC of the asset version.
+        document.getElementById('search-input').value = srAssetVersion.isrc;
+        // Select 'ISRC' in the dropdown menu.
+        searchForm.selectedTypeIndex = 0; // 0 is index for ISRC search
+        searchForm.submitSearch();
+    },
+
+    /**
+     * Performs automatic ISWC search from clicking the ISWC link in a
+     * composition asset card.
+     * @param {MouseEvent} e The click event.
+     */
+    linkIswcSearch: function(e) {
+        var compAsset = e.model.item;
+        // Set the text of the search box to be the ISWC of the asset.
+        document.getElementById('search-input').value = compAsset.iswc;
+        // Select 'ISWC' in the dropdown menu.
+        searchForm.selectedTypeIndex = 1; // 1 is index for ISWC search
+        searchForm.submitSearch();
+    },
+
+    /**
+     * Converts an object into an array of its properties.
+     * @param {Object} obj The object for conversion.
+     * @return {Array<Object>} An array of objects where object[i].key is the
+     *      property name and object[i].value is the property value.
+     */
+    toArray: function(obj) {
+        var arr = [];
+        for (var property in obj) {
+            if (obj.hasOwnProperty(property)) {
+                // 'property' is the property name and 'obj[property]'' is the
+                // property value.
+                arr.push({
+                    key: property,
+                    value: obj[property],
+                });
+            }
+        }
+        return arr;
+    },
+
+    /**
+     * Returns whether {str} is 'N/A'.
+     * @param {string} str The string to compare.
+     * @return {boolean} Whether or not {str} is 'N/A'.
+     */
+    isNA: function(str) {
+        return str.trim() === 'N/A';
+    },
+
+    /**
+     * Returns whether the checkbox with ID {id} is checked.
+     * @param {string} id The HTML id of the paper-checkbox.
+     * @return {boolean} Whether or not the checkbox is checked.
+     */
+    isChecked: function(id) {
+        return document.getElementById(id).checked;
+    },
+
+    /**
+     * Determines whether the asset section should be displayed (if there are
+     * versions of {asset} to be displayed). Used for ISRC search.
+     * @param {!Object} asset Asset object containing its asset ID and versions.
+     * @return {boolean} Whether or not the subheader should be displayed.
+     */
+    shouldDisplayAsset: function(asset) {
+        // If user wants to see all versions, then there must be versions to be
+        // displayed.
+        if (!searchApp.showMine || !searchApp.isIsrcSearch) {
+            return true;
+        }
+
+        // Otherwise, see if there are versions belonging to the content owner.
+        var versions = asset.value.items;
+        var mineCount = 0;
+        for (var i = 0; i < versions.length; i++) {
+            if (versions[i].mine) {
+                mineCount++;
+            }
+        }
+        return mineCount > 0;
+    },
+
+    /**
+     * Determines whether the asset version (not belonging to the content owner)
+     * should be displayed.
+     * @return {boolean} Whether or not the asset version should be displayed.
+     */
+    shouldDisplayVersion: function() {
+        return !(searchApp.isIsrcSearch && searchApp.showMine);
+    },
+
+    /**
+     * Fetches the showMine property.
+     * @return {boolean} The value of the showMine property.
+     */
+    getShowMine: function() {
+        return searchApp.showMine;
+    },
+
+    /**
+     * Finds whether the display has cut off some of the territories or
+     * territory conflicts.
+     * @param {string} assetID The ID of the version being checked.
+     * @param {string} displayed A string of the territories being displayed.
+     * @param {string} type Describes the type of territories in {displayed}.
+     *     Either 'owned' for territories owned or 'conflicts' for territory
+     *     conflicts.
+     * @return {boolean} True if the territories being displayed are all of the
+     *     possible territories.
+     */
+    displayingFullOwnership: function(assetID, displayed, type) {
+        if (type === 'owned') {
+            var fullTerritories = ISRC_HANDLER.fullOwnershipStrMap[assetID];
+            return fullTerritories === displayed;
+        }
+        if (type === 'conflicts') {
+            var fullConflicts = ISRC_HANDLER.fullConflictsStrMap[assetID];
+            return fullConflicts === displayed;
+        }
+    },
+
+    /**
+     * Shows a popup displaying the full list of territories owned if the
+     * displayed list is concatenated.
+     * @param{MouseEvent} e The click event.
+     */
+    showFullOwnershipPopup: function(e) {
+        var assetID = e.model.__data__.version.id;
+        var fullTerritories = ISRC_HANDLER.fullOwnershipStrMap[assetID];
+        searchApp.openAlert(fullTerritories);
+    },
+
+    /**
+     * Shows a popup displaying the full list of territory conflicts if the
+     * displayed list is concatenated.
+     * @param{MouseEvent} e The click event.
+     */
+    showFullConflictsPopup: function(e) {
+        var assetID = e.model.__data__.version.id;
+        var fullConflicts = ISRC_HANDLER.fullConflictsStrMap[assetID];
+        searchApp.openAlert(fullConflicts);
+    },
+
+
+    /*************************End HTML Helper Methodss************************/
+
+});
+
+</script>
+
+</dom-module>

@@ -1,0 +1,150 @@
+<!--
+This file defines a class with methods that make API calls for ISWC search and
+handle the results.
+-->
+
+<script>
+
+/** Class to handle ISWC search. */
+class IswcSearchHandler {
+
+    constructor() {
+        /**
+         * Array of the remaining sound recording assets that can be loaded on
+         * future pages.
+         * @type{Array<object>}
+         */
+        this.srRemainingAssets= [];
+    }
+
+    /**
+     * Gets the remaining array after removing the first {size} elements. Used
+     * to get remaining sound recording assets that can be loaded.
+     * @param {?Array<TYPE>} arr The array to operate on.
+     * @param {number} size The number of elements to remove from the front.
+     * @return {!Array<TYPE>} The remaining array.
+     */
+    _getRemainingArr(arr, size) {
+        arr = arr || [];
+        var length = arr.length;
+        if (length > size) {
+            return arr.slice(size, length);
+        }
+        return [];
+    }
+
+    /**
+     * Loads all remaining sound recording assets 50 at a time (the maximum
+     * possible to list at a time).
+     */
+    loadAll() {
+        loadingSpinner.startLoadingSpinner();
+        var newCall = false;
+        var numRemaining = ISWC_HANDLER.srRemainingAssets.length;
+
+        setTimeout(function() {
+            if (numRemaining > 0) {
+                var keepSpinning = false;
+                if (numRemaining > RESULTS_PER_PAGE) {
+                    // Doesn't stop the loading spinner until the final call.
+                    keepSpinning = true;
+                }
+                ISWC_HANDLER.handleIswcAssetSearch(
+                    ISWC_HANDLER.srRemainingAssets, newCall, keepSpinning);
+                ISWC_HANDLER.loadAll();
+            }
+        }, API_CALL_DELAY);
+    }
+
+    /**
+     * Loads the next 50 sound recordings (the maximum possible to list at
+     * at time).
+     */
+    loadMore() {
+        loadingSpinner.startLoadingSpinner();
+        ISWC_HANDLER.handleIswcAssetSearch(
+            ISWC_HANDLER.srRemainingAssets, false);
+        SCROLL_HANDLER.removeScrollListener();
+    }
+
+    /**
+     * Handles the response from the call to asset search.
+     * @param {Array<Object>} assets The composition assets returned by asset
+     *     search.
+     * @param {boolean} newCall Whether the call is coming from asset search
+     *     or load more/all with overflow assets.
+     * @param {boolean} keepSpinning Whether or not to turn or the loading
+     *     spinner at the end of the search.
+     */
+    handleIswcAssetSearch(assets, newCall, keepSpinning) {
+        // Searching for assets for the first time instead of loading more info.
+        if (newCall) {
+            DISPLAY_HANDLER.srAssetCount.totalCount = (
+                assets.pageInfo.totalResults);
+
+            var assets = assets.items || [];
+            DISPLAY_HANDLER.srAssetCount.returnedCount = assets.length;
+            // There is overflow if there are more assets than can be searched
+            // at a time.
+            DISPLAY_HANDLER.overflow = assets.length > RESULTS_PER_PAGE;
+        }
+
+        if (assets.length === 0) {
+            DISPLAY_HANDLER.handleSearchResults();
+            loadingSpinner.stopLoadingSpinner();
+        } else {
+            ISWC_HANDLER._processIswcAssetSearch(assets, keepSpinning);
+        }
+    }
+
+    /**
+     * Searches for metadata of sound recording assets using asset list for ISWC
+     *     search.
+     * @param {Array<Object>} assets The composition assets returned by asset
+     *     search.
+     * @param {boolean} keepSpinning Whether or not to turn or the loading
+     *     spinner at the end of the search.
+     */
+    _processIswcAssetSearch(assets, keepSpinning) {
+        // No more than 50 asset IDs can be passed into asset list.
+        var currAssets = searchApp.limitArrSize(assets, RESULTS_PER_PAGE);
+        this.srRemainingAssets = this._getRemainingArr(
+            assets, RESULTS_PER_PAGE);
+
+        var assetIDArr = [];
+        currAssets.forEach(function(asset) {
+            assetIDArr.push(asset.id);
+        });
+        var assetIDStr = assetIDArr.join();
+
+        API_CALLS.assetList(
+            this._iswcAssetListCallback, assetIDStr, assetIDArr, keepSpinning);
+    }
+
+    /**
+     * Processes sound recording results of asset list for ISWC search for
+     *     display/export.
+     * @param {Object} response The response from the call to asset list.
+     * @param {Array<string>} assetIDArr An array of the composition asset IDs
+     *     from asset search.
+     * @param {boolean} keepSpinning Whether or not to turn or the loading
+     *     spinner at the end of the search.
+     */
+    _iswcAssetListCallback(response, assetIDArr, keepSpinning) {
+        var assets = response.items;
+        var map = JSON.parse(JSON.stringify(assetsDisplay.srAssets));
+        var currPagination = Object.keys(map).length;
+
+        ASSET_HANDLER.processForDisplay(
+            assets, 'metadataEffective', assetIDArr, map, true, currPagination);
+        CSV_EXPORT.srJsonArr = ASSET_HANDLER.processMapIntoArrays(map);
+        assetsDisplay.srAssets = map;
+
+        DISPLAY_HANDLER.handleSearchResults(keepSpinning);
+        if (!keepSpinning) {
+            loadingSpinner.stopLoadingSpinner();
+        };
+    }
+}
+
+</script>

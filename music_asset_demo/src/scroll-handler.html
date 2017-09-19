@@ -1,0 +1,84 @@
+<!--
+This file defines a class with methods that listen for window scrolling and
+perform processes related to scrolling (loading assets, etc.).
+-->
+
+<script>
+
+/** Class to handle scrolling processes. */
+class ScrollHandler {
+
+    /** Finds the location of the scrollbar. */
+    getScrollLocation() {
+        var scrollLocation = document.body.scrollTop;
+        return scrollLocation + window.innerHeight;
+    }
+
+    /**
+     * Checks if the user is at the bottom of the page and there's more
+     * information to load.
+     * @returns {boolean} Whether or not information should be loaded.
+     */
+    _checkForPageBottom() {
+        var currLocation = this.getScrollLocation();
+        var max = document.body.scrollHeight;
+        var diff = Math.abs(max - currLocation);
+        return (diff < 5) && (ISWC_HANDLER.srRemainingAssets.length > 0);
+    }
+
+    /**
+     * Listens for scrolling and loads more information if the user is at the
+     * bottom of the page.
+     */
+    addScrollListener() {
+        var thisObj = this;
+
+        window.onscroll = function (event) {
+            if (thisObj._checkForPageBottom()) {
+                ISWC_HANDLER.loadMore();
+            }
+        }
+    }
+
+    /** Removes any response when the user scrolls. */
+    removeScrollListener() {
+        window.onscroll = null;
+    }
+
+    /** Scrolls the window up slightly to avoid loading more assets. */
+    scrollUp() {
+        var offset = -10;
+        if (this._checkForPageBottom()) {
+            window.scrollBy(0, offset);
+        }
+
+        // Re-add the scroll listener.
+        this.addScrollListener();
+    }
+
+    /**
+     * Add transition state listener for the {collapsible}. Used to scroll up
+     * after closing the collapsible if necessary.
+     * @param {iron-collapse} collapsible The collapsible to add the listener
+     *     to.
+     */
+    addCollapsibleTransitionListener(collapsible) {
+        var thisObj = this;
+
+        collapsible.addEventListener('transitioning-changed', function(e) {
+            var transitioning = e.detail.value;
+            if (!transitioning && !collapsible.opened) {
+                thisObj.scrollUp();
+            } else if (!transitioning) {
+                // Re-add the scroll listener if collapsible is opened.
+                thisObj.addScrollListener();
+            } else {
+                // Remove scroll listener while transitioning.
+                thisObj.removeScrollListener();
+            }
+        });
+    }
+
+}
+
+</script>

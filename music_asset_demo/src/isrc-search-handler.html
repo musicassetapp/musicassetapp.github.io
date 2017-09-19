@@ -1,0 +1,425 @@
+<!--
+This file defines a class with methods that make API calls for ISRC search and
+handle the results.
+-->
+
+<script>
+
+/** Class to handle ISRC search. */
+class IsrcSearchHandler {
+
+    constructor() {
+        /**
+         * A temporary object linking sound recording asset IDs to their
+         * versions which are processed for display later to become the property
+         * srAssets of assetsDisplay.
+         * @type{Object}
+         */
+        this.tempSrMap = {};
+
+        /**
+         * An array of asset ID's of sound recording assets that have versions
+         * owned by the current content owner.
+         * @type{Array<string>}
+         */
+        this.mySrVersionIds = [];
+
+        /**
+         * Object mapping asset ID to a string of the full list of territories
+         * in which the current content owner owns the asset.
+         * @type{Object}
+         */
+        this.fullOwnershipStrMap = {};
+
+        /**
+         * Object mapping asset ID to a string of the full list of territory
+         * conflicts related to the current content owner.
+         * @type{Object}
+         */
+        this.fullConflictsStrMap = {};
+    }
+
+    /*******************************ISRC Search********************************/
+
+    /**
+     * Finds the asset versions and compositions linked to the response from
+     * asset search.
+     * @param {!Object} assets The response from the API call to asset search.
+     */
+    handleIsrcAssetSearch(assets) {
+        var assets = assets.items || [];
+        if (assets.length > 0) {
+            ISRC_HANDLER._iterateAssets(assets, 0, [], {});
+        } else { // No assets found.
+            DISPLAY_HANDLER.handleSearchResults();
+            loadingSpinner.stopLoadingSpinner();
+        }
+    }
+
+    /**
+     * Finds the metadata history of every asset in assets.
+     * @param {Array<Object>} assets The asset results from asset search.
+     * @param {integer} index The current index in assets.
+     * @param {Array<Object>} assetRelationships The asset relationships
+     *     linked with the assets seen so far.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _iterateAssets(assets, index, assetRelationships, srMap) {
+        var asset = assets[index];
+        API_CALLS.metadataHistory(ISRC_HANDLER._handleAssetVersions, asset.id,
+            assets, index, assetRelationships, srMap);
+    }
+
+    /**
+     * Adds the asset versions found by the call to metadata history to the
+     * asset ID map, then searches for the asset's asset relationships.
+     * @param {Object} versions The response from the call to metadata history.
+     * @param {Array<Object>} assets The asset results from asset search.
+     * @param {integer} index The current index in assets.
+     * @param {Array<Object>} assetRelationships The asset relationships
+     *     linked with the assets seen so far.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _handleAssetVersions(versions, assets, index, assetRelationships, srMap) {
+        var asset = assets[index];
+        var versions = versions.items;
+        var assetIDArr = searchApp.duplicateElement(asset.id, versions.length);
+
+        // Store data for later processing.
+        ISRC_HANDLER.tempSrMap[asset.id] = versions;
+        ASSET_HANDLER.processForDisplay(
+            versions, 'metadata', assetIDArr, srMap, true);
+
+        // Finds the relationships linked to the assets.
+        setTimeout(function() {
+            API_CALLS.assetRelationships(ISRC_HANDLER._handleAssetRelationships,
+                asset.id, assets, index, assetRelationships, srMap);
+        }, API_CALL_DELAY);
+    }
+
+    /**
+     * Processes the relationships of the sound recording assets in order to
+     * find linked compostions.
+     * @param {Array<Object>} relationships The response from the call to
+     *     asset relationships.
+     * @param {Array<Object>} assets The asset results from asset search.
+     * @param {integer} index The current index in assets.
+     * @param {Array<Object>} assetRelationships The asset relationships
+     *     linked with the assets seen so far.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _handleAssetRelationships(
+        relationships, assets, index, assetRelationships, srMap) {
+        var relationships = relationships.items || [];
+        assetRelationships = assetRelationships.concat(relationships);
+
+        if (index + 1 < assets.length) { // Iterates to the next asset.
+            ISRC_HANDLER._iterateAssets(
+                assets, index + 1, assetRelationships, srMap);
+        } else {
+            // Processes all of the composition asset ID's found at once.
+            ISRC_HANDLER._handleCompIds(assetRelationships, srMap);
+        }
+    }
+
+    /**
+     * Finds the composition ID's linked to the sound recording assets using
+     * the asset relationships and searches for these IDs.
+     * @param {Array<Object>} assetRelationships The relationships between the
+     *     sound recording assets and any compositions.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     */
+    _handleCompIds(assetRelationships, srMap) {
+        // No more than 50 asset IDs can be passed into asset list.
+        assetRelationships = searchApp.limitArrSize(
+            assetRelationships, RESULTS_PER_PAGE);
+
+        var assetIDArr = [];
+        // The child asset ID is the ID of the composition linked to the asset.
+        assetRelationships.forEach(function(currObject) {
+            // Filter out duplicate and sound recording asset ID's
+            if (currObject &&
+                !searchApp.inArray(assetIDArr, currObject.childAssetId) &&
+                !searchApp.inArray(
+                    Object.keys(srMap), currObject.childAssetId)) {
+                assetIDArr.push(currObject.childAssetId);
+            }
+        });
+        var assetIDStr = assetIDArr.join();
+        API_CALLS.assetList(
+            this._isrcAssetListCallback, assetIDStr, assetIDArr, srMap);
+    }
+
+    /**
+     * Processes the composition assets found by the call to asset list and
+     * finishes the search.
+     * @param {Object} response The response from the call to asset list.
+     * @param {Array<string>} assetIDArr The composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     */
+    _isrcAssetListCallback(response, assetIDArr, srMap) {
+        var compMap = {};
+        ASSET_HANDLER.processForDisplay(response.items, 'metadataEffective',
+            assetIDArr, compMap, false);
+        ISRC_HANDLER._findMySrVersions(srMap);
+
+        // Processes ownership information now that all the results are
+        // found.
+        ISRC_HANDLER._getOwnershipInfo(compMap, srMap);
+    }
+
+    /**
+     * Finds the sound recording results that belong to the current content
+     *     owner and adds their IDs to an array.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _findMySrVersions(srMap) {
+        for (var id in srMap) {
+            if (srMap.hasOwnProperty(id)) {
+                srMap[id].items.forEach(function(version) {
+                    if (version.mine && !searchApp.inArray(
+                        ISRC_HANDLER.mySrVersionIds, version.id)) {
+                        ISRC_HANDLER.mySrVersionIds.push(version.id);
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * Loads information for the final page to display.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _finishIsrcSearch(compMap, srMap) {
+        CSV_EXPORT.srJsonArr = ASSET_HANDLER.processMapIntoArrays(srMap);
+        assetsDisplay.srAssets = srMap;
+        CSV_EXPORT.compJsonArr = ASSET_HANDLER.processMapIntoArrays(compMap);
+        assetsDisplay.compAssets = compMap;
+        DISPLAY_HANDLER.handleSearchResults();
+        loadingSpinner.stopLoadingSpinner();
+    }
+
+    /*****************************End ISRC Search******************************/
+
+    /****************************Ownership Handling****************************/
+
+    /**
+     * Gets ownership information on sound recording assets belonging to the
+     *     user.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _getOwnershipInfo(compMap, srMap) {
+        var myAssetIDStr = this.mySrVersionIds.join(',');
+        if (this.mySrVersionIds.length > 0) {
+            setTimeout(function() {
+                API_CALLS.assetListOwnership(ISRC_HANDLER._findContentOwnership,
+                    myAssetIDStr, compMap, srMap);
+            }, API_CALL_DELAY);
+        } else {
+            ISRC_HANDLER._findContentOwnership(null, compMap, srMap);
+        }
+    }
+
+    /**
+     * Gets information on the sound recording content owners.
+     * @param {Object} territories An object containing mappings of
+     *     sound recording assets to the territories they're owned in.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _findContentOwnership(territories, compMap, srMap) {
+        var ownerIDs = ISRC_HANDLER._getOwnerIDs(srMap);
+        setTimeout(function() {
+            API_CALLS.contentOwners(ISRC_HANDLER._handleOwnershipInfo,
+                ownerIDs.join(','), territories, compMap, srMap);
+        }, API_CALL_DELAY);
+    }
+
+    /**
+     * Gets all of the content owner IDs associated with the sound recording
+     *     versions without repeats.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _getOwnerIDs(srMap) {
+        var ownerIDs = [];
+        for (var assetID in this.tempSrMap) {
+            if (this.tempSrMap.hasOwnProperty(assetID)) {
+                var assetVersions = this.tempSrMap[assetID];
+                for (var i = 0; i < assetVersions.length; i++) {
+                    var owner = assetVersions[i].origination.owner;
+                    if (!searchApp.inArray(ownerIDs, owner)) {
+                        ownerIDs.push(owner);
+                    }
+                }
+            }
+        }
+        return ownerIDs;
+    }
+
+    /**
+     * Adds territories and content owners to the sound recording results, then
+     *     finishes the search.
+     * @param {Object} contentOwners An object containing mappings of
+     *     content owner IDs to their display names.
+     * @param {Object} territories An object containing mappings of
+     *     sound recording assets to the territories they're owned in.
+     * @param {Object} compMap A map of composition asset IDs.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _handleOwnershipInfo(contentOwners, territories, compMap, srMap) {
+        var territories = territories ? territories.items : null;
+        ISRC_HANDLER._handleOwnership(contentOwners.items, territories, srMap);
+        ISRC_HANDLER._finishIsrcSearch(compMap, srMap);
+    }
+
+    /**
+     * Adds territories and content owners to the results.
+     * @param {Array<Object>} contentOwners An array of content owner objects.
+     * @param {Array<Object>} territories An array of ownership information
+     *     objects.
+     * @param {Object} srMap A map of sound recording asset IDs to their
+     *     versions.
+     */
+    _handleOwnership(contentOwners, territories, srMap) {
+        for (var id in srMap) {
+            if (srMap.hasOwnProperty(id)) {
+                var asset = srMap[id].items;
+                for (var i = 0; i < asset.length; i++) {
+                    var version = asset[i];
+                    if (version.mine && territories) {
+                        this._addTerritories(territories, version, id);
+                        this._addTerritoryConflicts(territories, version, id);
+                    }
+                    // If there are no territories owned
+                    if (version.mine && !version['territories']) {
+                        version['territories'] = 'None';
+                        ISRC_HANDLER.fullOwnershipStrMap[id] = 'None';
+                    }
+                    // If there are no territory conflicts
+                    if (version.mine && !version['territoryConflicts']) {
+                        version['territoryConflicts'] = 'None';
+                        ISRC_HANDLER.fullConflictsStrMap[id] = 'None';
+                    }
+                    this._addOwners(contentOwners, version);
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds the correct ownership conflicts to a sound recording asset.
+     * @param {Array<Object>} territories An array of ownership information
+     *     objects.
+     * @param {Object} version The asset version that belongs to the user.
+     * @param {integer} id The sound recording asset ID.
+     */
+    _addTerritoryConflicts(territories, version, id) {
+        territories.forEach(function(territory) {
+            if (territory.id === id && territory.ownershipConflicts &&
+                territory.ownershipConflicts.general &&
+                territory.ownershipConflicts.general.length > 0) {
+                var territoryConflicts = territory.ownershipConflicts.general;
+                var myTerritoryConflicts = [];
+                for (var i = 0; i < territoryConflicts.length; i++) {
+                    var conflict = territoryConflicts[i];
+                    var ownershipConflict = conflict.conflictingOwnership;
+                    if (ownershipConflict &&
+                        searchApp._checkForContainmentInObjectArray(
+                        'owner', AUTH.contentOwnerIds[0], ownershipConflict)) {
+                        var territory = conflict.territory;
+                        if (territory) {
+                            myTerritoryConflicts.push(territory);
+                        }
+                    }
+                }
+                version['territoryConflicts'] = ISRC_HANDLER._makeOwnershipStr(
+                    'conflict', myTerritoryConflicts, true);
+                ISRC_HANDLER.fullConflictsStrMap[id] = (
+                    ISRC_HANDLER._makeOwnershipStr(
+                        'conflict', myTerritoryConflicts, false));
+            }
+        });
+    }
+
+    /**
+     * Adds the correct ownership territories to a sound recording asset.
+     * @param {Array<Object>} territories An array of ownership information
+     *     objects.
+     * @param {Object} version The asset version that belongs to the user.
+     * @param {integer} id The sound recording asset ID.
+     */
+    _addTerritories(territories, version, id) {
+        territories.forEach(function(territory) {
+            if (territory.id === id && territory.ownershipMine &&
+                territory.ownershipMine.general
+                && territory.ownershipMine.general.length > 0) {
+                var myOwnership = territory.ownershipMine.general[0];
+                var type = myOwnership.type;
+                var territories = myOwnership.territories;
+                version['territories'] = ISRC_HANDLER._makeOwnershipStr(
+                    type, territories, true);
+                ISRC_HANDLER.fullOwnershipStrMap[id] = (
+                    ISRC_HANDLER._makeOwnershipStr(type, territories, false));
+            }
+        });
+    }
+
+    /**
+     * Makes the correct string to display depending on the territory info.
+     * @param {string} type The type of territory information.
+     * @param {Array<string>} territories An array of territories where the
+     *     user owns the asset version or an array of territory conflicts.
+     * @param {boolean} concat Whether or not to show a concatenated string if
+     *     {territories} is too long.
+     */
+    _makeOwnershipStr(type, territories, concat) {
+        if (type === 'exclude' && !territories) {
+            return 'Worldwide';
+        }
+        if ((type === 'include' || type === 'conflicts') && !territories) {
+            return 'None';
+        }
+
+        var territoryLimit = 20;
+        var tail = '';
+
+        if (concat && territories.length > territoryLimit) {
+            territories = searchApp.limitArrSize(territories, territoryLimit);
+            tail = '...';
+        }
+
+        if (type === 'include' || type === 'conflict') {
+            return territories.join(', ') + tail;
+        } else {
+            return 'All territories except ' + territories.join(', ') + tail;
+        }
+    }
+
+    /**
+     * Adds the correct content owner display name to the sound recording asset.
+     * @param {Array<Object>} contentOwners An array of content owner objects.
+     * @param {Object} version The asset version that belongs to the user.
+     */
+    _addOwners(contentOwners, version) {
+        contentOwners.forEach(function(contentOwner) {
+            if (contentOwner.id === version.owner) {
+                version['owner'] = contentOwner.displayName;
+            }
+        });
+    }
+
+    /**************************End Ownership Handling**************************/
+}
+
+</script>

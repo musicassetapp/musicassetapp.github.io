@@ -1,0 +1,88 @@
+<!--
+This file defines a Polymer module containing the template for the popup dialog
+prompting the user to choose a content owner to search on behalf of as well as
+related properties and methods.
+-->
+
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../bower_components/paper-item/paper-item.html">
+<link rel="import" href="../bower_components/paper-listbox/paper-listbox.html">
+<link rel="import" href="./yt-shared-styles.html">
+
+<dom-module id="yt-content-owner-choice">
+
+<template>
+
+  <style include="yt-shared-styles"></style>
+
+  <paper-dialog id="content-owner-dialog" modal on-iron-overlay-closed="setContentOwner">
+    <p>You have multiple content owners linked to your account.<br>Please choose which one to search on behalf of.</p>
+    <div class="layout horizontal center-justified">
+      <paper-dropdown-menu id="content-owner-names" style="width: 300px;">
+        <paper-listbox class="dropdown-content" selected=0 slot="dropdown-content" style="width: 300px;">
+          <template is="dom-repeat" items="{{contentOwners}}" as="owner">
+            <paper-item>{{owner.displayName}}</paper-item>
+          </template>
+        </paper-listbox>
+      </paper-dropdown-menu>
+    </div>
+    <div class="buttons">
+      <paper-button autofocus dialog-confirm>OK</paper-button>
+    </div>
+  </paper-dialog>
+
+</template>
+
+<script>
+
+window.addEventListener('WebComponentsReady', function(e) {
+    // Executed when the Polymer WebComponents finish loading.
+    contentOwnerChoice = document.getElementById('content-owner-choice');
+});
+
+Polymer({
+
+    is: 'yt-content-owner-choice',
+
+    properties: {
+
+        /**
+         * Contains an array of the content owners linked to the user's account
+         */
+        contentOwners: {
+            type: Array,
+            value: [],
+        },
+
+    },
+
+    /**
+     * Uses the selected display name to find the content owner ID.
+     * @param {string} name The selected display name.
+     */
+    _findID: function(name) {
+        for (var i = 0; i < contentOwnerChoice.contentOwners.length; i++) {
+            var owner = contentOwnerChoice.contentOwners[i];
+            if (owner.displayName === name) {
+                return owner.id;
+            }
+        }
+    },
+
+    /**
+     * Sets the content owner ID array to contain only the selected content
+     * owner.
+     */
+    setContentOwner: function() {
+        var name = document.getElementById('content-owner-names').value;
+        var id = contentOwnerChoice._findID(name);
+        AUTH.contentOwnerIds = [id];
+    },
+
+});
+
+</script>
+
+</dom-module>

@@ -1,0 +1,292 @@
+<!--
+This defines a class with methods relating to creating and processing assets for
+display.
+-->
+
+<script>
+
+/** Class to process and create assets. */
+class AssetHandler {
+
+    /****************************Asset Processing******************************/
+
+    /**
+     * Converts a map of arrays into one array.
+     * @param {Object} map A map containing asset information.
+     * @return {Array<Object>} arr The array containing the concatenated
+     *     information held in the map.
+     */
+    processMapIntoArrays(map) {
+        var arr = [];
+        for (var id in map) {
+            arr = arr.concat(map[id].items);
+        }
+        return arr;
+    }
+
+    /**
+     * Convert the {assetObject} into an asset with metadata for display and add
+     * it to {assetMap}.
+     * @param {!Object} assetMap For ISRC search this is a mapping of asset ID's
+     *     to an array of their versions. For ISWC search this is a mapping of
+     *     page number to the assets on that page.
+     * @param {!Object} assetObject An object returned by Partner API containing
+     *     information about either a sound recording asset version or a
+     *     composition asset.
+     * @param {!Object} metadata The metadata of {assetObject}.
+     * @param {string} assetID The asset ID of {assetObject}.
+     * @param {boolean} isSoundRecording Whether the {assetObject} is a sound
+     *     recording (otherwise, it is a composition).
+     * @param {number} pagination Page number used to organize sound recording
+     *     assets for ISWC search.
+     */
+    _addToMap(assetMap, assetObject, metadata, assetID, isSoundRecording,
+        pagination) {
+        var key = assetID;
+        var mine = false;
+
+        if (!searchApp.isIsrcSearch) {
+            // For ISWC search, results are organized by pagination rather than
+            // asset ID's.
+            key = 'isrcResults' + pagination;
+        } else if (isSoundRecording) {
+            // Determine whether the sound recording asset version is owned by
+            // the currently signed-in content owner.
+            mine = (assetObject.origination &&
+                searchApp.inArray(
+                    AUTH.contentOwnerIds, assetObject.origination.owner));
+        }
+
+        // Get the asset with character limit on its properties.
+        var asset = this._createAsset(
+            isSoundRecording, assetObject, metadata, mine, assetID);
+
+        // Asset could be null if there is no metadata.
+        if (asset) {
+            if(isSoundRecording) asset.mine = mine;
+
+            if (!assetMap[key] || !assetMap[key].items) {
+                assetMap[key] = {};
+                assetMap[key].items = [];
+            }
+            if (mine) {
+                // Push the asset version to the front of the version array so
+                // that the versions owned by the current content appear first.
+                assetMap[key].items = [asset].concat(assetMap[key].items);
+            } else {
+                assetMap[key].items.push(asset);
+            }
+        }
+    }
+
+    /**
+     * Set the page details for the sound recording asset results on the current
+     * page. Only used for ISWC search.
+     * @param {!Object} assetMap A mapping of page number to the assets on that
+     *     page as well as page details.
+     * @param {number} pagination Current page number.
+     */
+    _setPageDetails(assetMap, pagination) {
+        var currKey = 'isrcResults' + pagination;
+        var prevKey = 'isrcResults' + (pagination - 1);
+
+        // Start at the 'pageEnd' of the previous page or at 1 if this is the
+        // first page.
+        var pageStart = ((assetMap[prevKey] && assetMap[prevKey].pageEnd + 1) ||
+            1);
+        var pageEnd = pageStart + assetMap[currKey].items.length - 1;
+        assetMap[currKey].pageStart = pageStart;
+        assetMap[currKey].pageEnd = pageEnd;
+    }
+
+    /**
+     * Convert the {assetObjects} into assets, add them to {assetMap} and to an
+     * asset array, and return them for display.
+     * @param {?Array<object>}} assetObjects The objects to process and add to
+     *     {assetMap} and {assetArr}. The objects are either sound recording
+     *     asset versions or composition assets.
+     * @param {string} metadataType The type of metadata to retrieve from the
+     *     {assetObjects}.
+     * @param {!Array<string>} assetIDArr An array of the same size as
+     *     {assetObjects} containing the asset ID of each object. assetIDArr[i]
+     *     is the asset ID of assetObjects[i].
+     * @param {!Object} assetMap For ISRC search this is a mapping of asset ID's
+     *     to an array of their versions. For ISWC search this is a mapping of
+     *     page number to the assets on that page.
+     * @param {boolean} isSoundRecording Whether the {assetObjects} are sound
+     *     recordings (otherwise, they are compositions).
+     * @param {number} pagination Page number used to organize sound recording
+     *     assets for ISWC search.
+     */
+    processForDisplay(assetObjects, metadataType, assetIDArr, assetMap,
+        isSoundRecording, pagination) {
+        if (assetObjects) {
+            for (var i = 0; i < assetObjects.length; i++) {
+                if (assetObjects[i]) {
+                    var object = assetObjects[i];
+                    var metadata = object[metadataType] || {};
+                    var assetID = assetIDArr[i];
+                    if (assetMap) {
+                        this._addToMap(assetMap, object, metadata,
+                            assetID, isSoundRecording, pagination);
+                    }
+                }
+            }
+            if (!searchApp.isIsrcSearch) {
+                this._setPageDetails(assetMap, pagination);
+            }
+        }
+    }
+
+    /************************End Asset Processing***************************/
+
+    /****************************Asset Creation*******************************/
+
+    /**
+     * Capitalizes the first letter of every word in a phrase.
+     * @param {string} phrase The original phrase.
+     * @param {boolean} capitalize Whether or not to capitalize the phrase.
+     * @returns {string} phrase The capitalized phrase.
+     */
+    _capitalizeFirstLetter(phrase, capitalize) {
+        if (capitalize) {
+            var newPhrase = []
+            phrase.split(' ').forEach(function(word) {
+                var newWord = word.charAt(0).toUpperCase() + word.slice(1);
+                newPhrase.push(newWord);
+            });
+            return newPhrase.join(' ');
+        }
+        return phrase;
+    }
+
+    /**
+     * Determines if a sound recording asset version is empty (has no metadata).
+     * @param {!Object} asset The asset version that was just parsed.
+     * @return {boolean} Whether or not the version is empty.
+     */
+    _srHasNoMetadata(asset) {
+        var propertyCount = 0;
+        for (var property in asset) {
+            // Exclude the ISRC, asset ID, source, and owner properties as they
+            // will never be empty.
+            if (asset.hasOwnProperty(property) && property !== 'isrc' &&
+                property !== 'source' && property !== 'owner' &&
+                property !== 'id') {
+                if (asset[property] && asset[property] !== '' &&
+                    asset[property] !== 'N/A') {
+                    propertyCount ++;
+                }
+            }
+        }
+        return propertyCount === 0;
+    }
+
+    /**
+     * Parses information into a formatted string for display/export.
+     * @param {TYPE} value The asset property to be parsed.
+     * @param {?boolean} capitalize Whether or not to capitalize the string.
+     * @param {?boolean} noValue Whether to display N/A if the property is
+     *     empty.
+     */
+    _parseProperty(value, capitalize, noValue) {
+        if (!value || value == false) {
+            if (noValue) return 'N/A';
+            return value; // If empty, property should be displayed as empty.
+        }
+
+        var thisObj = this;
+        if (Array.isArray(value)) { // Converts array values into strings.
+            var valueArr = []
+            value.forEach(function(phrase) {
+                valueArr.push(
+                    thisObj._capitalizeFirstLetter(phrase, capitalize));
+            });
+            var phrase = valueArr.join(', ');
+        } else {
+            var phrase = this._capitalizeFirstLetter(value, capitalize);
+        }
+        return phrase;
+    }
+
+    /**
+     * Creates an object containing sound recording metadata information.
+     * @param {!Object} asset The asset object to fill in with information.
+     * @param {!Object} object The asset object returned from the API.
+     * @param {!Object} metadata The asset's metadata object.
+     * @param {boolean} mine Whether or not the asset version belongs to
+     *     the user.
+     */
+    _makeSrAsset(asset, object, metadata, mine, assetID) {
+        asset['isrc'] = this._parseProperty(metadata.isrc, false, true);
+        asset['id'] = this._parseProperty(assetID, false, true);
+        asset['title'] = this._parseProperty(
+            metadata.title, true, true);
+        asset['artists'] = this._parseProperty(metadata.artist, true);
+        asset['album'] = this._parseProperty(metadata.album, true);
+        asset['upc'] = this._parseProperty(metadata.upc);
+        asset['recordLabel'] = this._parseProperty(metadata.label, true);
+        asset['grid'] = this._parseProperty(metadata.grid);
+        asset['genres'] = this._parseProperty(metadata.genres, true);
+        asset['source'] = (object.origination ? this._parseProperty(
+            object.origination.source) : '');
+        asset['owner'] = (object.origination ? this._parseProperty(
+            object.origination.owner) : '');
+        if (mine) {
+            asset['customId'] = this._parseProperty(metadata.customId);
+            asset['notes'] = this._parseProperty(metadata.notes, false);
+        }
+
+        if (this._srHasNoMetadata(asset)) {
+            asset['noMetadata'] = true;
+        }
+    }
+
+    /**
+     * Creates an object containing composition metadata information.
+     * @param {!Object} asset The asset object to fill in with information.
+     * @param {!Object} object The asset object returned from the API.
+     * @param {!Object} metadata The asset's metadata object.
+     */
+    _makeCompAsset(asset, object, metadata, assetID) {
+        asset['iswc'] = this._parseProperty(metadata.iswc, false, true);
+        asset['id'] = this._parseProperty(assetID, false, true);
+        asset['title'] = this._parseProperty(metadata.title, true, 'title');
+        asset['hfa'] = this._parseProperty(metadata.hfa);
+        asset['writers'] = this._parseProperty(metadata.writer, true);
+        asset['label'] = this._parseProperty(object.label, true);
+    }
+
+    /**
+     * Creates an object containing relevant asset metadata information.
+     * @param {boolean} isSoundRecording Whether or not the asset is a sound
+     *     recording.
+     * @param {!Object} object The asset object returned from the API.
+     * @param {!Object} metadata The asset's metadata object.
+     * @param {boolean} mine Whether or not the asset version belongs to
+     *     the user.
+     * @param {string} assetID The asset ID.
+     * @returns {!Object} asset The asset object.
+     */
+    _createAsset(isSoundRecording, object, metadata, mine, assetID) {
+        var asset = {};
+        var bigLimit = 60;
+        var limit = 80;
+
+        if (isSoundRecording) {
+            this._makeSrAsset(asset, object, metadata, mine, assetID);
+        } else {
+            this._makeCompAsset(asset, object, metadata, assetID);
+        }
+
+        // If the asset has no metadata, return null.
+        if (!asset['noMetadata']) {
+            return asset;
+        }
+    }
+
+    /****************************End Asset Creation****************************/
+
+}
+
+</script>

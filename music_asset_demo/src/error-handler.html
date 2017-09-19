@@ -1,0 +1,135 @@
+<!--
+This file defines a class with methods that handle errors in search queries
+as well as API calls.
+-->
+
+<script>
+
+/** Class to handle errors. */
+class ErrorHandler {
+
+    /**
+     * Displays an error message based on the API call response.
+     * @param {!Object} response The response provided by the API call.
+     * @param {!Object} request The API request.
+     */
+    handleError(response, request) {
+        try {
+            var origin =  ' from ' + request.Zq.k5.path.split('?')[0] + ': ';
+        } catch(err) {
+            var origin = '';
+        }
+
+        var error = response.error;
+        var code = error.code;
+        var errorMessage = code + ' error ' + origin + error.message;
+        var rateLimitExceeded = 403;
+        var fileNotFound = 404;
+
+        if (code === rateLimitExceeded) {
+            searchApp.openAlert(
+                errorMessage + 'Please try again in a minute.');
+        }
+
+        // Filenotfound is raised if an ISRC/ISWC is not found by the API call.
+        // This result is handled by the web app display.
+        else if (code !== fileNotFound) {
+            searchApp.openAlert(errorMessage);
+        }
+
+        loadingSpinner.stopLoadingSpinner();
+    }
+
+    /**
+     * Checks if the search value matches a valid ISRC format.
+     * @param {string}searchValue The search query to be checked.
+     * @return {boolean} Whether or not {searchValue} is a valid ISRC format.
+     */
+    _checkIsrcFormat(searchValue) {
+        if (!searchValue) return false;
+
+        // Checks that the first 2 characters are alpha, the next 3 are
+        // alphanumeric, and the last 7 are numeric.
+        if (!/^[a-zA-Z]{2,2}[a-zA-Z0-9]{3,3}\d{7,7}$/.test(searchValue)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Checks if the search value matches a valid ISWC format.
+     * @param {string}searchValue The search query to be checked.
+     * @return {boolean} Whether or not {searchValue} is a valid ISWC format.
+     */
+    _checkIswcFormat(searchValue) {
+        if (!searchValue) return false;
+
+        // Checks that the first character is a T and the remaining 10 are
+        // numbers.
+        if (!/^T\d{9,9}\d$/.test(searchValue)) {
+            return false;
+        }
+        return true;
+    }
+
+    _writeIsrcError() {
+        var returnStr = [];
+        var ref = 'https://www.usisrc.org/about/constructing_with_code.html';
+        returnStr.push('Invalid ISRC format.');
+        returnStr.push('Please enter your code in the format XXXXXXXXXXXX.')
+        returnStr.push('Your code should consist of 12 alphanumeric ' +
+            'characters.');
+        returnStr.push('See <a href="' + ref + '">here</a> ' +
+            'for more information.');
+        return returnStr.join('<br>');
+    }
+
+    _writeIswcError() {
+        var returnStr = [];
+        var ref = 'http://www.iswc.org/en/iswc.html';
+        returnStr.push('Invalid ISWC format.');
+        returnStr.push('Please enter your code in the format TXXXXXXXXXX.')
+        returnStr.push('Your code should consist of T followed by 10 numbers.');
+        returnStr.push('See <a href="' + ref + '">here</a> ' +
+            'for more information.');
+        return returnStr.join('<br>');
+    }
+
+    /**
+     * Checks for errors before searching.
+     * @param {string} searchValue The search query to be checked.
+     * @return {boolean} Whether or not there is an error.
+     */
+    hasQueryError(searchValue) {
+        if (!AUTH.signedIn) {
+            // Redirects the user to sign in and resubmits the search.
+            AUTH.handleAuthClick();
+            AUTH.resubmit = true;
+            return true;
+        }
+        if (AUTH.contentOwnerIds.length == 0) {
+            searchApp.openAlert(
+                'Your account is not linked to a content owner ID. ' +
+                'Please sign in to an account with content ID and retry.');
+            return true;
+        }
+        if (!searchValue) {
+            searchApp.openAlert('Please input a query.');
+            return true;
+        }
+        if (searchApp.isIsrcSearch &&
+            !this._checkIsrcFormat(searchValue)) {
+            searchApp.openAlert(this._writeIsrcError());
+            return true;
+        }
+        if (!searchApp.isIsrcSearch &&
+            !this._checkIswcFormat(searchValue)) {
+            searchApp.openAlert(this._writeIswcError());
+            return true;
+        }
+        return false;
+    }
+
+}
+
+</script>

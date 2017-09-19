@@ -1,0 +1,171 @@
+<!--
+This file defines a class with methods used to resize the table holding the
+'Advanced Search' checkboxes.
+-->
+
+<script>
+
+/** Class to handle the 'Advanced Search' checkbox table. */
+class CheckboxTableHandler {
+
+    constructor() {
+        /**
+         * Number of checkboxes per row for the 'Advanced Search' checkboxes.
+         * @type{string}
+         */
+        this.checkboxCols = '8';
+    }
+
+    /**
+     * Adds a row to the table.
+     * @param {Element} table The table containing the checkboxes.
+     * @param {string} row The ID number of the row to be deleted.
+     * @param {integer} numPrecedingRows The number of rows in the table before
+     *     the new rows should be added.
+     * @param {integer} rowsAdded The number of rows added to the table so far.
+     */
+    _addRowToTable(table, row, numPrecedingRows, rowsAdded) {
+        var newRow = table.insertRow(numPrecedingRows + rowsAdded);
+        newRow.id = 'row' + row;
+        return newRow;
+    }
+
+    /**
+     * Removes a row from the table.
+     * @param {Element} table The table containing the checkboxes.
+     * @param {string} row The ID number of the row to be deleted.
+     */
+    _deleteRowFromTable(table, row) {
+        var currRow = document.getElementById('row' + row);
+        currRow.parentNode.removeChild(currRow);
+    }
+
+    /**
+     * Adds numColumns number of checkboxes to a row.
+     * @param {integer} rowsAdded The number of rows added to the table so far.
+     * @param {Element} table The table containing the checkboxes.
+     * @newRow {Element} newRow The row to contain the checkboxes.
+     * @param {Array<Element>} boxes An array of checkboxes to be added
+     *     to the table.
+     * @param {integer} numColumns The number of checkboxes per row.
+     */
+    _addCheckboxesToRow(rowsAdded, table, newRow, boxes, numColumns) {
+        var rowBoxes = boxes.slice(rowsAdded * numColumns,
+                                  (rowsAdded + 1) * numColumns);
+        newRow.innerHTML = '';
+        rowBoxes.forEach( function(box) {
+            newRow.appendChild(box);
+        })
+    }
+
+    /**
+     * Iterates through the checkbox rows, adds or deletes rows from the table
+     * as appropriate, then adds the correct checkboxes to each row.
+     * @param {integer} i The index in rows.
+     * @param {integer} rowsAdded The number of rows added to the table so far.
+     * @param {Element} table The table containing the checkboxes.
+     * MISSING PARAM rows
+     * @param {string} oldRows The rows that previously existed in the table.
+     * @param {string} newRows The rows that will be in the table.
+     * @param {Array<Element>} boxes An array of checkboxes to be added to
+     *     the table.
+     * @param {integer} numColumns The number of checkboxes per row.
+     * @param {integer} numPrecedingRows The number of rows in the table before
+     *     the new rows should be added.
+     */
+    _iterateRows(i, rowsAdded, table, rows, oldRows, newRows, boxes, numColumns,
+        numPrecedingRows) {
+        var row = rows[i];
+
+        if (searchApp.inArray(oldRows, row) &&
+            !searchApp.inArray(newRows, row)) {
+            this._deleteRowFromTable(table, row);
+        } else if (searchApp.inArray(newRows, row)) {
+            if (!searchApp.inArray(oldRows, row)) {
+                var newRow = this._addRowToTable(
+                    table, row, numPrecedingRows, rowsAdded);
+            } else {
+                var newRow = document.getElementById('row' + row);
+            }
+            this._addCheckboxesToRow(
+                rowsAdded, table, newRow, boxes, numColumns);
+            rowsAdded++;
+        }
+        if (i + 1 < rows.length) {
+            this._iterateRows(i + 1, rowsAdded, table, rows, oldRows, newRows,
+                boxes, numColumns, numPrecedingRows);
+        }
+    }
+
+    /**
+     * Proccesses checkbox information  of a specific type (either sound
+     * recording or composition) to change from the old number of rows to
+     * the new number of rows.
+     * @param {Element} table The table containing the checkboxes.
+     * @param {string} oldRows The rows that previously existed in the table.
+     * @param {string} newRows The rows that will be in the table.
+     * @param {integer} numColumns The number of checkboxes per row.
+     * @param {string} boxClassName The classname of every row in the table
+     *     containing the current type of checkbox.
+     * @param {integer} numPrecedingRows The number of rows in the table before
+     *     the new rows should be added.
+     */
+    _changeTableSizeOfType(table, oldRows, newRows, numColumns,
+        boxClassName, numPrecedingRows) {
+        var union = searchApp.getUnion(oldRows, newRows);
+        var boxes = document.getElementsByClassName(boxClassName);
+        boxes = Array.prototype.slice.call(boxes);
+        this._iterateRows(0, 0, table, union, oldRows, newRows, boxes,
+            numColumns, numPrecedingRows);
+    }
+
+    /**
+     * Determines which checkbox rows should be displayed depending on the
+     * number of checkboxes per row.
+     * @param {string} old The previous number of checkboxes per row.
+     * @param {string} curr The current number of checkboxes per row.
+     */
+    changeTableSize(old, curr) {
+        this.checkboxCols = curr;
+        var table = document.getElementById('checkbox-table');
+        var numColumns = parseInt(curr);
+
+        // Objects mapping the number of checkboxes per row to which rows
+        // will be displayed.
+        var srRows = { // The sound recording checkbox options.
+            '8': ['2'],
+            '4': ['2', '3'],
+            '2': ['2', '3', '4', '5'],
+            '1': ['2', '3', '4', '5', '6', '7', '8', '9']
+        }
+        // The options for sound recordings belonging to the user.
+        var srRowsMine = {
+            '8': ['11'],
+            '4': ['11'],
+            '2': ['11', '12'],
+            '1': ['11', '12', '13', '14']
+        }
+        var compRows = { // The composition checkbox options.
+            '8': ['16'],
+            '4': ['16'],
+            '2': ['16', '17'],
+            '1': ['16', '17', '18'],
+        }
+
+        // Changes the sound recording then the composition checkboxes.
+        var numPrecedingRows = 1;
+        this._changeTableSizeOfType(table, srRows[old], srRows[curr],
+            numColumns, 'srCheck', numPrecedingRows);
+
+        numPrecedingRows = numPrecedingRows + srRows[curr].length + 1;
+        this._changeTableSizeOfType(table, srRowsMine[old], srRowsMine[curr],
+            numColumns, 'srCheckMine', numPrecedingRows);
+
+        numPrecedingRows = numPrecedingRows + srRowsMine[curr].length + 1;
+        this._changeTableSizeOfType(table, compRows[old], compRows[curr],
+            numColumns, 'compCheck', numPrecedingRows);
+    }
+
+}
+
+</script>

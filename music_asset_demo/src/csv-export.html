@@ -1,0 +1,222 @@
+<!--
+This file defines a class with methods that facilitate the export of asset data
+into a downloaded CSV file.
+-->
+
+<script>
+
+/** Class to handle exporting the assets into a CSV file. */
+class CsvExport {
+
+     constructor() {
+        /**
+         * The most recent search query by the user.
+         * @type{string}
+         */
+         this.searchValue = '';
+
+         /**
+          * An array of sound recording objects to be exported.
+          * @type{Array<Object>}
+          */
+         this.srJsonArr = [];
+
+         /**
+          * An array of composition objects to be exported.
+          * @type{Array<Object>}
+          */
+         this.compJsonArr = [];
+     }
+
+    /**
+     * Finds the headers of specifically an object that belongs to the user,
+     * which will have the most information.
+     * @param {Array<Object>} jsonObject The array of JSON objects.
+     * @return {Array<string>} headers An array of CSV headers.
+     */
+    _findMyHeaders(jsonObject) {
+        var headers = [];
+        for (var i = 0; i < jsonObject.length; i++) {
+            var object = jsonObject[i];
+            if (object.mine) {
+                for (var key in object) {
+                    headers.push(key);
+                }
+                return headers;
+            }
+        }
+        return headers;
+    }
+
+    /**
+     * Finds the properties of the objects to be the header of the CSV.
+     * @param {Array<Object>} jsonObject The array of JSON objects.
+     * @param {boolean} isSoundRecording Whether the object contains sound
+     *     recordings or compositions.
+     * @return {Array<string>} headers An array of CSV headers.
+     */
+    _findHeaders(jsonObject, isSoundRecording) {
+        var headers = [];
+        if (!jsonObject || jsonObject.length === 0) return [];
+
+        // If the objects are sound recordings, some could have more information
+        // than others (if some belong to the user and some don't).
+        if (isSoundRecording) {
+            headers = this._findMyHeaders(jsonObject);
+        }
+        if (headers.length === 0) {
+            for (var key in jsonObject[0]) {
+                headers.push(key);
+            }
+        }
+        return headers;
+    }
+
+    /**
+     * Takes in an object and converts it into a string whose property values
+     *     are delimited by commas.
+     * @param {Obect} object The object to be converted.
+     * @param {Array<string>} headers The properties to look for.
+     * @return {string} A string of values delimited by commas.
+     */
+    _findCSVObject(object, headers) {
+        var csvObject = [];
+        for (var i = 0; i < headers.length; i++) {
+            var key = headers[i];
+
+            // Saves the non-abbreviated version of the territories or territory
+            // conflicts.
+            if (key === 'territories' && object.mine) {
+                var item = ISRC_HANDLER.fullOwnershipStrMap[object.id];
+            } else if (key === 'territoryConflicts' && object.mine) {
+                var item = ISRC_HANDLER.fullConflictsStrMap[object.id];
+            } else {
+                var item = object[key];
+            }
+
+            if (item && typeof item === 'string' && item.includes(',')) {
+                csvObject.push('"' + item + '"');
+            } else {
+                csvObject.push(item);
+            }
+        }
+        return csvObject.join(',');
+    }
+
+    /**
+     * Converts an array of JSON objects into a CSV file.
+     * @param {Array<Object>} jsonObject The array of objects to be converted.
+     * @param {boolean} isSoundRecording Whether the object contains sound
+     *     recordings or compositions.
+     * @return {string} The CSV version of the JSON objects.
+     */
+    _convertToCSV(jsonObject, isSoundRecording) {
+        var headers = this._findHeaders(jsonObject, isSoundRecording);
+        var objects = [headers.join(',')];
+        jsonObject.forEach (function(object) {
+            var csvObject = CSV_EXPORT._findCSVObject(object, headers);
+            objects.push(csvObject);
+        });
+        return objects.join('\n');
+    }
+
+    /**
+     * Creates a formatted date/time string.
+     * @return {string} date.time
+     */
+    _getDateTime() {
+        var date = new Date();
+
+        var year = date.getFullYear().toString();
+        var month = date.getMonth().toString();
+        var day = date.getDate().toString();
+        var hour = date.getHours().toString();
+        var minute = date.getMinutes().toString();
+        var second  = date.getSeconds().toString();
+
+        return year + month + day + '.' + hour + minute + second
+    }
+
+    /**
+     * Creates a file name containing the search value and the date/time.
+     * @return {string} filename
+     */
+    _makeName() {
+        var datetime = this._getDateTime();
+
+        // Adds the search value into the name of the result file.
+        if (searchApp.isIsrcSearch) {
+            return 'ISRC=' + this.searchValue + '.' + datetime;
+        } else {
+            return 'ISWC=' + this.searchValue + '.' + datetime;
+        }
+    }
+
+    /**
+     * Downloads a CSV file using the user's browser.
+     * @param {string} csvFile The search results formatted as a CSV file.
+     * @param {string} name The name of the downloaded file.
+     */
+    _download(csvFile, name) {
+        var csvData = new Blob([csvFile]);
+
+        // Temporarily adds an element to the window containing the information.
+        var a = window.document.createElement('a');
+        a.href = window.URL.createObjectURL(csvData, {type: "text/plain"});
+        a.download = (name + '.csv');
+
+        // Uses the element to download the information.
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    /**
+     * Removes any sound recording versions not belonging to the user if the
+     *     search is set to 'show mine'.
+     * @param {Array<Object>} jsonArr The array to be filtered.
+     */
+    _filterNotMine(jsonArr) {
+        if (!searchApp.showMine || !searchApp.isIsrcSearch) return jsonArr;
+        var newArr = [];
+        for (var i = 0; i < jsonArr.length; i++) {
+            if (jsonArr[i].mine) {
+                newArr.push(jsonArr[i]);
+            }
+        }
+        return newArr;
+    }
+
+    /**
+     * Downloads the current search results as a CSV file.
+     * @param {boolean} isSoundRecording Whether the object contains sound
+     *    recordings or compositions.
+     */
+    _saveAsCSV(isSoundRecording) {
+        if (isSoundRecording) {
+            var name = this._makeName() + '.ISRCresults';
+            var csvFile = this._convertToCSV(
+                this._filterNotMine(this.srJsonArr), isSoundRecording);;
+        } else {
+            var name = this._makeName() + '.ISWCresults';
+            var csvFile = this._convertToCSV(this.compJsonArr, isSoundRecording);
+        }
+        this._download(csvFile, name);
+    }
+
+    /** Calls saveAsCSV when an export button is clicked */
+    addExportListeners() {
+        var isrcExport = document.getElementById('sr-export');
+        var iswcExport = document.getElementById('comp-export');
+        var thisObj = this;
+
+        isrcExport.addEventListener('click', function(){
+            thisObj._saveAsCSV(true);
+        });
+        iswcExport.addEventListener('click', function(){
+            thisObj._saveAsCSV(false);
+        });
+    }
+}
+
+</script>

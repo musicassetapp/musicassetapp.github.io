@@ -1,0 +1,40 @@
+<!--
+This file defines global variables used across all of the files under 'src'.
+-->
+
+<script>
+
+/**
+* The number of results to display per page
+* @type{number}
+*/
+const RESULTS_PER_PAGE = 50;
+
+/**
+* The number of milliseconds to wait between two API calls.
+* @type{number}
+*/
+const API_CALL_DELAY = 1000;
+
+// Initiate variables to access the various Polymer modules.
+var searchApp;
+var searchForm;
+var loadingSpinner;
+var assetsDisplay;
+var contentOwnerChoice;
+
+// Create instances of the objects loaded in 'search-app'.
+const AUTH = new Authorization();
+const API_CALLS = new ApiCalls();
+const LOCAL_STORAGE = new LocalStorage();
+const CSV_EXPORT = new CsvExport();
+const ERROR_HANDLER = new ErrorHandler();
+const RESIZE_HANDLER = new ResizeHandler();
+const CHECKBOX_TABLE_HANDLER = new CheckboxTableHandler();
+const SCROLL_HANDLER = new ScrollHandler();
+const ISRC_HANDLER = new IsrcSearchHandler();
+const ISWC_HANDLER = new IswcSearchHandler();
+const ASSET_HANDLER = new AssetHandler();
+const DISPLAY_HANDLER = new DisplayHandler();
+
+</script>

@@ -1,0 +1,318 @@
+<!--
+This file defines a class with methods that choose and display the proper
+headers and other UI elements in accordance with asset results.
+-->
+
+<script>
+
+/** Class to handle displaying the asset headers and options. */
+class DisplayHandler {
+
+     constructor() {
+        /**
+         * Whether there are too many results to display (> the global
+         * RESULTS_PER_PAGE).
+         * @type{boolean}
+         */
+        this.overflow = false;
+
+        /**
+         * Object used in ISWC search for counting the number of sound recording
+         * assets found. srAssetCount.totalCount gives the total number found
+         * and srAssetCount.returnedCount gives the number that could be
+         * actually returned by the API.
+         * @type{Object}
+         */
+        this.srAssetCount = {};
+     }
+
+    /**
+     * Saves search results for export and formats the result display.
+     * @param {?boolean} keepSpinning Whether or not to keep spinning the
+     *     loading spinner (because there's more information to process).
+     */
+    handleSearchResults(keepSpinning) {
+        var isrcHeader = document.getElementById('sr-header');
+        var iswcHeader = document.getElementById('comp-header');
+        var srExists = searchApp.srExists();
+        var compExists = searchApp.compExists();
+
+        // Pagination is only necessary for ISWC search.
+        if (searchApp.isIsrcSearch) {
+            SCROLL_HANDLER.removeScrollListener();
+        } else {
+            SCROLL_HANDLER.addScrollListener();
+        }
+
+        if (!keepSpinning) {
+            this._showDisplay(srExists, compExists, isrcHeader, iswcHeader);
+            this.showSubheaders();
+            this._writeScrollSubHeader();
+        }
+    }
+
+    /** Displays a load all option to load any remaining information. */
+    _writeLoadAll() {
+        var loadAllText = document.getElementById('load-all-text');
+        loadAllText.style.color = 'blue';
+        loadAllText.style.cursor = 'pointer';
+        loadAllText.style.cursor = 'hand';
+        loadAllText.innerHTML = '&nbspload all';
+        loadAllText.onclick = ISWC_HANDLER.loadAll;
+    }
+
+    /** Removes the load all option (when all of the information is loaded). */
+    _removeLoadAll() {
+        var loadAllText = document.getElementById('load-all-text');
+        loadAllText.innerHTML = '';
+    }
+
+    /**
+     * Write a message differently depending on if count is singular or plural.
+     * @param {string} assetString The name of the type of asset.
+     * @param {integer} count The number of results.
+     * @returns {string} A message describing the number of version results.
+     */
+    _writeMessage(assetString, count) {
+        var verb = (count === 1) ? 'is ' : 'are ';
+        var ending = (count === 1) ? 'result.' : 'results.'
+        return 'There ' + verb + count + ' total ' + assetString + ending;
+    }
+
+    /**
+     * Displays export buttons and expand/collapse icons after the search.
+     * @params {boolean} forSoundRecordings Whether the display is for sound\
+     *     recordings.
+     */
+    _showButtonsAndIcons(forSoundRecordings) {
+        if (forSoundRecordings) {
+            var srExport = document.getElementById('sr-export');
+            var expandISRC = document.getElementById('toggle-sr-assets');
+            srExport.style.display = 'block';
+            expandISRC.style.display = 'block';
+        } else {
+            var compExport = document.getElementById('comp-export');
+            var expandISWC = document.getElementById('toggle-comp-assets');
+            compExport.style.display = 'block';
+            expandISWC.style.display = 'block';
+        }
+    }
+
+    /**
+     * Writes the composition/sound recording headers.
+     * @param {Element} header The HTML header to modify.
+     * @param {boolean} forSoundRecordings Whether or not the header is for
+     *     sound recordings.
+     */
+    _writeHeaders(header, forSoundRecordings) {
+        header.style.fontSize = '24px';
+        var message = 'Compositions:';
+        if (forSoundRecordings) message = 'Sound Recordings:';
+        header.innerHTML = message;
+    }
+
+    /**
+     * Writes the appropriate header when there are no sound recording and/or
+     * composition results.
+     * @param {Element} header The HTML header to modify.
+     */
+    _writeNoResultHeaders(header) {
+        RESIZE_HANDLER.resizeHeaders(RESIZE_HANDLER.wSize);
+        var searchType = 'ISWC';
+        if (searchApp.isIsrcSearch) searchType = 'ISRC';
+        var origin = '';
+        if (searchApp.showMine && searchApp.srExists()) {
+            origin = ' that belong to you';
+        }
+        var message = ('There are no sound recording assets ' +
+            'associated with this ' + searchType + origin +
+            ' (case-sensitive).');
+        header.innerHTML = message;
+    }
+
+    /**
+     * Displays the headers, buttons, and icons relevant to the search results.
+     * @param {boolean} stExists Whether there were sound recording results.
+     * @param {boolean} compExists Whether there were composition results.
+     * @param {Element} srHeader The sound recording HTML header to be modified.
+     * @param {Element} compHeader The composition HTML header to be modified.
+     */
+    _showDisplay(srExists, compExists, srHeader, compHeader) {
+        if (srExists) {
+            this._writeHeaders(srHeader, true);
+            this._showButtonsAndIcons(true);
+        } else {
+            this._writeNoResultHeaders(srHeader);
+        }
+
+        if (compExists) {
+            this._writeHeaders(compHeader, false);
+            this._showButtonsAndIcons(false);
+        } else if (searchApp.isIsrcSearch && srExists) {
+            // Compositions should only be expected if the search is ISRC search
+            // and sound recordings were found.
+            this._writeNoResultHeaders(compHeader);
+        }
+    }
+
+    /** Writes subheaders depending on the number of search results. */
+    showSubheaders() {
+        // When the window is smaller, the subheaders become abbreviated.
+        var sizeLimit = 900;
+        var srExists = searchApp.srExists();
+        var compExists = searchApp.compExists();
+
+        this._writeSubheaders(srExists, sizeLimit);
+        this._writeSubheader(false, ' composition ', compExists, sizeLimit);
+    }
+
+    /**
+     * Writes all three potential sound recording subheaders.
+     * @param {boolean} exists Whether or not there are sound recording results.
+     * @param {integer} limit The window size limit before the subheaders are
+     *     abbreviated.
+     */
+    _writeSubheaders(srExists, limit) {
+        var noun = ' sound recording ';
+        if (searchApp.isIsrcSearch) {
+            noun = ' sound recording metadata version ';
+        }
+        this._writeSubheader(
+            true, noun, srExists, limit);
+        this._writeSubheader2(srExists, limit);
+        this._writeSubheader3(srExists, limit);
+    }
+
+    /**
+     * Writes the first subheader, which displays the total number of results.
+     * @param {boolean} forSoundRecordings Whether or not the subheader is for
+     *     sound recording results.
+     * @param {string} string Either sound recording or composition.
+     * @param {boolean} exists Whether there were any search results.
+     * @param {integer} limit The window size limit before the subheader is
+     *     abbreviated.
+     */
+    _writeSubheader(forSoundRecordings, string, exists, limit) {
+        var count = searchApp.getCount(forSoundRecordings, this.overflow);
+        var noun = (count == 1) ? ' result.' : ' results.';
+        var remaining = ISWC_HANDLER.srRemainingAssets.length;
+        var tooManyResults = (DISPLAY_HANDLER.srAssetCount.totalCount >
+            DISPLAY_HANDLER.srAssetCount.returnedCount);
+
+        var id = 'sr-subheader';
+        if (!forSoundRecordings) id = 'comp-subheader';
+
+        var msg = this._writeMessage(string, count);
+        var shortMsg = count + noun;
+        if (!exists) {
+            msg = '';
+            shortMsg = '';
+        }
+
+        RESIZE_HANDLER.selectText(id, limit, shortMsg, msg);
+    }
+
+    /**
+     * Writes the second subheader, which shows the current number of results
+     * being displayed if there are too many to be displayed at once.
+     * @param {boolean} exists Whether there were any search results.
+     * @param {integer} limit The window size limit before the subheader is
+     *     abbreviated.
+     */
+    _writeSubheader2(exists, limit) {
+        var count = searchApp.getCount(true, false);
+        var remaining = ISWC_HANDLER.srRemainingAssets.length;
+        var tooltip = document.getElementById('finished-loading-tooltip');
+
+        var id = 'sr-subheader2';
+        var msg = 'Displaying ' + count + ' results. ';
+        var shortMsg = 'Displaying ' + count + '. ';
+        if (!exists || searchApp.isIsrcSearch || !this.overflow) {
+            msg = '';
+            shortMsg = '';
+        } else if (remaining == 0) {
+            msg = 'Displaying ' + count + ' results. All results have loaded.';
+            tooltip.style.display = 'block';
+        }
+
+        RESIZE_HANDLER.selectText(id, limit, shortMsg, msg);
+    }
+
+    /**
+     * Writes the third subheader, which instructs the user on how to load more
+     * results if there are too many results to be displayed at once.
+     * @param {boolean} exists Whether there were any search results.
+     * @param {integer} limit The window size limit before the subheader is
+     *     abbreviated.
+     */
+    _writeSubheader3(exists, limit) {
+        var remaining = ISWC_HANDLER.srRemainingAssets.length;
+
+        var id = 'sr-subheader3';
+        var msg = 'Scroll for more or ';
+        var shortMsg = 'Scroll or ';
+        if (!exists || searchApp.isIsrcSearch || !this.overflow) {
+            msg = '';
+            shortMsg = '';
+        }
+
+        if (remaining === 0) {
+            msg = '';
+            shortMsg = '';
+            this._removeLoadAll();
+        } else {
+            this._writeLoadAll();
+        }
+
+        RESIZE_HANDLER.selectText(id, limit, shortMsg, msg);
+    }
+
+    /**
+     * Writes a footer for the results if there are no more results to be
+     * loaded.
+     */
+    _writeNoMoreResults() {
+        var srScrollSubheader = document.getElementById('sr-load-more-footer');
+        srScrollSubheader.style.display = 'block';
+        srScrollSubheader.innerHTML = 'No more results to load.';
+        srScrollSubheader.style.color = '';
+        srScrollSubheader.style.cursor = '';
+        srScrollSubheader.onclick = null;
+    }
+
+    /** Writes a footer for the results to load more results. */
+    _writeLoadMore() {
+        var srScrollSubheader = document.getElementById('sr-load-more-footer');
+        srScrollSubheader.style.display = 'block';
+        srScrollSubheader.style.color = 'blue';
+        srScrollSubheader.style.cursor = 'pointer';
+        srScrollSubheader.style.cursor = 'hand';
+        srScrollSubheader.innerHTML = 'Load more';
+        srScrollSubheader.onclick = ISWC_HANDLER.loadMore;
+    }
+
+    /** Hides the result footer */
+    _hideScrollSubheader() {
+        var srScrollSubheader = document.getElementById('sr-load-more-footer');
+        srScrollSubheader.style.display = 'none';
+    }
+
+    /**
+     * Writes a footer for the results if there are too many results to display
+     * initially.
+     */
+    _writeScrollSubHeader() {
+        var exists = searchApp.srExists();
+        var remaining = ISWC_HANDLER.srRemainingAssets.length;
+        if (!searchApp.isIsrcSearch && exists && this.overflow &&
+            remaining === 0) {
+            this._writeNoMoreResults();
+        } else if (!searchApp.isIsrcSearch && exists && this.overflow) {
+            this._writeLoadMore();
+        } else {
+            this._hideScrollSubheader();
+        }
+    }
+}
+
+</script>

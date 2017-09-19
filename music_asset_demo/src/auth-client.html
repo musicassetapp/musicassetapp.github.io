@@ -1,0 +1,189 @@
+<!--
+This file sets up the OAuth 2.0 client and defines a class with methods
+relating to authorization and user/content owner ID's.
+-->
+
+<script>
+/**
+ * OAuth 2.0 Client ID of your application client (copy and paste).
+ * @type{string}
+ */
+const CLIENT_ID = (
+    '????.apps.googleusercontent' +
+    '.com');
+
+/**
+ * Discovery docs used for the OAuth 2.0 client. This application does not
+ * use any.
+ * @type{Array}
+ */
+const DISCOVERY_DOCS = [];
+
+/**
+ * Authorization scopes used. The scope needed for this application is
+ * YouTube Partner.
+ * @type{string}
+ */
+const SCOPES = 'https://www.googleapis.com/auth/youtubepartner';
+
+
+/** Handles the OAuth 2.0 client loading. */
+function handleClientLoad() {
+    gapi.load('client:auth2', initClient);
+}
+
+
+/** Initializes the OAuth 2.0 client and handles the sign-in state. */
+function initClient() {
+    gapi.client.init({
+        discoveryDocs: DISCOVERY_DOCS,
+        clientId: CLIENT_ID,
+        scope: SCOPES,
+
+    }).then(function () {
+        // Listen for sign-in state changes.
+        gapi.auth2.getAuthInstance().isSignedIn.listen(AUTH.updateSigninStatus);
+
+        // Handle the initial sign-in state.
+        AUTH.updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+        document.getElementById('sign-in').onclick = AUTH.handleAuthClick;
+        document.getElementById('sign-out').onclick = AUTH.handleSignoutClick;
+    });
+}
+
+/** Class to handle the authorization process. */
+class Authorization {
+
+     constructor() {
+        /**
+         * Array of content owner ID's linked to the currently authorized user.
+         * @type{Array<string>}
+         */
+        this.contentOwnerIds = [];
+
+        /**
+         * Whether or not there is an authorized user.
+         * @type{boolean}
+         */
+        this.signedIn = false;
+
+        /**
+         * Whether or not to resubmit the search after signing the user in.
+         * @type{boolean}
+         */
+        this.resubmit = false;
+     }
+
+    /**
+     * Set the user ID and initiate the components that depend on user ID.
+     * @param {Object} response The response from the call to people get.
+     */
+    _getUserIDCallback(response) {
+        LOCAL_STORAGE.userId = response.id;
+
+        // Search type listener for dropdown menu and checkboxes depend on the
+        // user's local history.
+        searchForm.addSearchTypeListener();
+        LOCAL_STORAGE.setCheckboxes();
+    }
+
+    /**
+     * Set the content owner ID to search on behalf of.
+     * @param {Object} response The response from the call to Content Owners.
+     */
+    _getOwnerIDCallback(response) {
+        loadingSpinner.stopLoadingSpinner();
+        if (response['error']) {
+            searchApp.openAlert(
+                'Warning: Your account is not linked to a content owner.' +
+                ' This search only works for users with content owner ID.');
+            AUTH.contentOwnerIds = [];
+        } else {
+            var ids = []
+            response.items.forEach( function(owner) {
+                ids.push(owner.id);
+            });
+            AUTH.contentOwnerIds = ids;
+            contentOwnerChoice.contentOwners = response.items;
+
+            // If more than one content owner ID is found, prompt user to choose
+            // one content owner to search on behalf of.
+            if (AUTH.contentOwnerIds.length > 1) {
+                searchApp.chooseContentOwner();
+            }
+        }
+        // Submit search if the user was redirected from search to sign in.
+        if (AUTH.resubmit) {
+            searchForm.submitSearch();
+            AUTH.resubmit = false;
+        }
+    }
+
+    /** Reset information on screen after user signs out. */
+    _resetInfoAfterSignOut() {
+        searchApp.resetInfo();
+        this.contentOwnerIds = [];
+        contentOwnerChoice.contentOwners = [];
+        LOCAL_STORAGE.userId = '';
+        searchForm.suggestions = [];
+        searchForm.selectedTypeIndex = 0;
+        document.getElementById('search-input').value = '';
+    }
+
+    /**
+     * Performs actions based on whether a user is signed in.
+     * @param {boolean} isSignedIn Whether the client found a signed-in user.
+     */
+    updateSigninStatus(isSignedIn) {
+        var signInBtn = document.getElementById('sign-in');
+        var signOutBtn = document.getElementById('sign-out');
+        var historyBtn = document.getElementById('clear-history');
+        var ownersBtn = document.getElementById('switch-content-owners');
+
+        if (isSignedIn) {
+            signInBtn.style.display = 'none';
+            signOutBtn.style.display = 'block';
+            historyBtn.style.display = 'block';
+
+            API_CALLS.accessToken = gapi.client.getToken().access_token;
+            API_CALLS.getUserID(AUTH._getUserIDCallback);
+            AUTH.signedIn = true;
+
+            // Display loading spinner while the owner ID is being retrieved.
+            loadingSpinner.startLoadingSpinner();
+            API_CALLS.getOwnerID(AUTH._getOwnerIDCallback);
+        } else {
+            signInBtn.style.display = 'block';
+            signOutBtn.style.display = 'none';
+            historyBtn.style.display = 'none';
+            ownersBtn.style.display = 'none';
+            AUTH._resetInfoAfterSignOut();
+            AUTH.signedIn = false;
+        }
+    }
+
+    /**
+     * Signs the user into the OAuth 2.0 client when sign in button is clicked.
+     * @param {Event} e The click event (unused).
+     */
+    handleAuthClick(e) {
+        gapi.auth2.getAuthInstance().signIn();
+    }
+
+    /**
+     * Signs the user out of the OAuth 2.0 client when sign out button is
+     * clicked.
+     * @param {Event} e The click event (unused).
+     */
+    handleSignoutClick(e) {
+        gapi.auth2.getAuthInstance().signOut();
+    }
+
+}
+
+</script>
+
+<script async defer src='https://apis.google.com/js/api.js'
+     onload='this.onload=function(){};handleClientLoad()'
+     onreadystatechange='if (this.readyState === 'complete') this.onload()'>
+</script>

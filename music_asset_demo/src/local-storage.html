@@ -1,0 +1,140 @@
+<!--
+This file defines a class with methods that write and read from local storage
+to obtain the user's history data used for autocomplete and maintaining
+'Advanced Search' checkbox state.
+-->
+
+<script>
+
+/** Class to handle user data in the local storage. */
+class LocalStorage {
+
+     constructor() {
+        /**
+         * ID of the currently authorized user. Used to retrieve the user's
+         * specific history data.
+         * @type{string}
+         */
+        this.userId = '';
+     }
+
+    /**
+     * Adds the search query into the node of the user's history depending on
+     * the search type.
+     * @param {string} type The type of search ('isrc' or 'iswc').
+     * @param {object} userHistory The user's data object stored in local
+     *     storage.
+     */
+    _writeSearchHistory(type, userHistory, searchValue) {
+        if (!userHistory[type]) {
+            userHistory[type] = [];
+        }
+
+        // Remove query from search history array if already present.
+        if (searchApp.inArray(userHistory[type], searchValue)) {
+            userHistory[type].splice(userHistory[type].indexOf(searchValue), 1);
+        }
+
+        userHistory[type].push(searchValue);
+    }
+
+    /**
+     * Adds the current state of the 'Advanced Search' checkboxes into the
+     * user's history.
+     * @param {object} userHistory The user's history object stored in local
+     *     storage.
+     */
+    _writeCheckboxHistory(userHistory) {
+        if (!userHistory['checkboxes']) {
+            userHistory['checkboxes'] = {};
+        }
+
+        var checkboxes = document.getElementsByClassName('checkbox');
+        for (var i = 0; i < checkboxes.length; i++) {
+            // Checkbox states stored by HTML id.
+            userHistory.checkboxes[checkboxes[i].id] = checkboxes[i].checked;
+        }
+    }
+
+    /** Writes the search query and checkbox states to the user's history. */
+    writeToLocalStorage(searchValue) {
+        var userHistory = JSON.parse(localStorage.getItem(this.userId));
+        if (!userHistory) {
+            userHistory = {};
+        }
+
+        if (searchApp.isIsrcSearch) {
+            this._writeSearchHistory('isrc', userHistory, searchValue);
+        } else {
+            this._writeSearchHistory('iswc', userHistory, searchValue);
+        }
+        this._writeCheckboxHistory(userHistory);
+        localStorage.setItem(this.userId, JSON.stringify(userHistory));
+
+        // Reset search suggestions based on the added query.
+        this.setSearchSuggestions(searchApp.isIsrcSearch);
+    }
+
+    /**
+     * Set the search autocomplete suggestions from the user's history based on
+     * the selected search type from the dropdown menu.
+     * @param {boolean} isIsrc Whether the selected search type is 'ISRC'.
+     */
+    setSearchSuggestions(isIsrc) {
+        var userHistory = JSON.parse(localStorage.getItem(this.userId));
+        var suggestions = [];
+        if (userHistory && isIsrc && userHistory.isrc) {
+            userHistory.isrc.forEach( function(item) {
+                suggestions.push({
+                    'text': item,
+                    'value': item,
+                });
+            });
+        } else if (userHistory && !isIsrc && userHistory.iswc) {
+            userHistory.iswc.forEach( function(item) {
+                suggestions.push({
+                    'text': item,
+                    'value': item,
+                });
+            });
+        }
+
+        // Reverse suggestions so that most recent queries are at the top.
+        searchForm.suggestions = suggestions.reverse();
+    }
+
+    /** Clears the search history of the current user. */
+    clearSearchHistory() {
+        var userHistory = JSON.parse(localStorage.getItem(this.userId));
+        userHistory['isrc'] = [];
+        userHistory['iswc'] = [];
+        localStorage.setItem(this.userId, JSON.stringify(userHistory));
+
+        // Reset the search suggestions (should be empty now).
+        this.setSearchSuggestions(searchApp.isIsrcSearch);
+    }
+
+    /**
+     * Set 'Advanced Search' checkboxes to be in the same state as the last
+     * search executed by the user.
+     */
+    setCheckboxes() {
+        // Retrieve user history from local storage.
+        var userHistory = JSON.parse(localStorage.getItem(this.userId));
+        if (userHistory && userHistory.checkboxes) {
+            for (var id in userHistory.checkboxes) {
+                if (userHistory.checkboxes.hasOwnProperty(id)) {
+                    if (document.getElementById(id)) {
+                        // 'id' is the checkbox ID and 'checkboxes[id]' is a
+                        // boolean value for whether it is checked.
+                        document.getElementById(id).checked = (
+                            userHistory.checkboxes[id]);
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+</script>
